@@ -1,0 +1,634 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { initializeApp } from 'firebase/app';
+import { 
+  getFirestore, doc, setDoc, getDoc, onSnapshot, updateDoc, collection, 
+  arrayUnion, runTransaction 
+} from 'firebase/firestore';
+import { 
+  getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken 
+} from 'firebase/auth';
+import { 
+  TrendingUp, TrendingDown, Timer, Users, Lock, Unlock, 
+  Coins, Package, Info, Play, RefreshCw, Trophy, ChevronRight
+} from 'lucide-react';
+
+// Firebase configuration from environment
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'investment-game-default';
+
+// --- Constants ---
+const TOTAL_ROUNDS = 5;
+const GAME_TIME_LIMIT = 60; 
+const INVESTMENT_TIME = 420; 
+const ASSETS = [
+  { id: 'flour', name: '밀가루', icon: '🍞' },
+  { id: 'oil', name: '석유', icon: '🛢️' },
+  { id: 'wood', name: '목재', icon: '🪵' },
+  { id: 'coke', name: '콜라', icon: '🥤' }
+];
+
+// --- Utilities ---
+const generateEquation = () => {
+  const x = Math.floor(Math.random() * 10);
+  const a = Math.floor(Math.random() * 5) + 1;
+  const b = Math.floor(Math.random() * 20);
+  const c = a * x + b;
+  return { 
+    text: `${a}x + ${b} = ${c}`, 
+    answer: x 
+  };
+};
+
+const formatTime = (seconds) => {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+};
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [role, setRole] = useState(null); 
+  const [gameState, setGameState] = useState(null);
+  const [myTeamData, setMyTeamData] = useState(null);
+  const [allTeams, setAllTeams] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // --- Auth ---
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (err) {
+        console.error("Auth error:", err);
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // --- Firestore Listeners ---
+  useEffect(() => {
+    if (!user) return;
+
+    const gameDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'gameState', 'current');
+    const unsubGame = onSnapshot(gameDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setGameState(docSnap.data());
+      } else {
+        const initial = {
+          phase: 'lobby',
+          round: 0,
+          timerStart: null,
+          timerDuration: 0,
+          priceHistory: [], 
+          currentPrices: { flour: 10000, oil: 10000, wood: 10000, coke: 10000 },
+          equations: [],
+          answers: []
+        };
+        setDoc(gameDocRef, initial);
+      }
+    }, (err) => console.error("Game state listener error", err));
+
+    const teamsRef = collection(db, 'artifacts', appId, 'public', 'data', 'teams');
+    const unsubTeams = onSnapshot(teamsRef, (snapshot) => {
+      const teams = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      setAllTeams(teams);
+      if (role && role.startsWith('team_')) {
+        const myData = teams.find(t => t.id === role);
+        if (myData) setMyTeamData(myData);
+      }
+    }, (err) => console.error("Teams sync error", err));
+
+    return () => {
+      unsubGame();
+      unsubTeams();
+    };
+  }, [user, role]);
+
+  // --- Admin Functions ---
+  const initializeGame = async () => {
+    if (!user) return;
+    const gameDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'gameState', 'current');
+    await updateDoc(gameDocRef, {
+      phase: 'lobby',
+      round: 0,
+      timerStart: null,
+      priceHistory: [],
+      currentPrices: { flour: 10000, oil: 10000, wood: 10000, coke: 10000 }
+    });
+  };
+
+  const startPasswordRound = async () => {
+    if (!user) return;
+    const nextRound = (gameState?.round || 0) + 1;
+    const eqs = [generateEquation(), generateEquation(), generateEquation()];
+    const gameDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'gameState', 'current');
+    
+    const updates = {
+      phase: 'password',
+      round: nextRound,
+      equations: eqs.map(e => e.text),
+      answers: eqs.map(e => e.answer),
+      timerStart: Date.now(),
+      timerDuration: GAME_TIME_LIMIT
+    };
+
+    // Generate price history on Round 1 so hints work immediately
+    if (nextRound === 1 || !gameState?.priceHistory || gameState.priceHistory.length === 0) {
+      const history = [];
+      let current = { flour: 10000, oil: 10000, wood: 10000, coke: 10000 };
+      history.push({ ...current, time: 0 });
+
+      for (let i = 1; i <= 7; i++) {
+        const next = {};
+        ASSETS.forEach(asset => {
+          const change = (Math.floor(Math.random() * 20) + 1) * 1000;
+          const direction = Math.random() > 0.5 ? 1 : -1;
+          next[asset.id] = Math.max(1000, current[asset.id] + (direction * change));
+        });
+        current = { ...next };
+        history.push({ ...current, time: i * 60 });
+      }
+      updates.priceHistory = history;
+      updates.currentPrices = history[0];
+    }
+    
+    await updateDoc(gameDocRef, updates);
+  };
+
+  const startInvestmentPhase = async () => {
+    if (!user) return;
+    const gameDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'gameState', 'current');
+    
+    // Ensure we have price history, if not, generate it (fallback)
+    let history = gameState?.priceHistory || [];
+    if (history.length === 0) {
+      let current = { flour: 10000, oil: 10000, wood: 10000, coke: 10000 };
+      history.push({ ...current, time: 0 });
+      for (let i = 1; i <= 7; i++) {
+        const next = {};
+        ASSETS.forEach(asset => {
+          const change = (Math.floor(Math.random() * 20) + 1) * 1000;
+          const direction = Math.random() > 0.5 ? 1 : -1;
+          next[asset.id] = Math.max(1000, current[asset.id] + (direction * change));
+        });
+        current = { ...next };
+        history.push({ ...current, time: i * 60 });
+      }
+    }
+
+    await updateDoc(gameDocRef, {
+      phase: 'investment',
+      priceHistory: history,
+      currentPrices: history[0],
+      timerStart: Date.now(),
+      timerDuration: INVESTMENT_TIME
+    });
+  };
+
+  // --- Team Functions ---
+  const joinTeam = async (teamNum) => {
+    if (!user) return;
+    const teamId = `team_${teamNum}`;
+    const teamDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'teams', teamId);
+    const snap = await getDoc(teamDocRef);
+    
+    if (!snap.exists()) {
+      await setDoc(teamDocRef, {
+        teamName: `${teamNum}조`,
+        budget: 100000,
+        portfolio: { flour: 0, oil: 0, wood: 0, coke: 0 },
+        hints: [],
+        solvedRounds: []
+      });
+    }
+    setRole(teamId);
+  };
+
+  const submitPassword = async (input) => {
+    if (!user || !myTeamData || gameState?.phase !== 'password' || myTeamData.solvedRounds?.includes(gameState.round)) return;
+    
+    const isCorrect = input.map(Number).join('') === gameState.answers?.join('');
+    const teamDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'teams', role);
+    
+    const targetMin = Math.floor(Math.random() * 7) + 1; 
+    const hintType = isCorrect ? 'A' : 'B';
+    let hintText = "";
+
+    // Robust safety for priceHistory
+    const history = gameState?.priceHistory || [];
+    const targetPrice = history[targetMin] || history[history.length - 1] || { flour: 10000, oil: 10000, wood: 10000, coke: 10000 };
+
+    if (hintType === 'A') {
+      hintText = `[${targetMin}분 후 가격 정보] `;
+      ASSETS.forEach(a => {
+        hintText += `${a.name}:${(targetPrice[a.id] || 0).toLocaleString()}원 `;
+      });
+    } else {
+      const shuffled = [...ASSETS].sort(() => 0.5 - Math.random());
+      hintText = `[${targetMin}분 후 일부 정보] `;
+      hintText += `${shuffled[0].name}:${(targetPrice[shuffled[0].id] || 0).toLocaleString()}원, `;
+      hintText += `${shuffled[1].name}:${(targetPrice[shuffled[1].id] || 0).toLocaleString()}원`;
+    }
+
+    await updateDoc(teamDocRef, {
+      solvedRounds: arrayUnion(gameState.round),
+      hints: arrayUnion({ round: gameState.round, type: hintType, text: hintText })
+    });
+
+    return isCorrect;
+  };
+
+  const trade = async (assetId, amount) => {
+    if (!user || !myTeamData || gameState?.phase !== 'investment') return;
+    const price = gameState.currentPrices?.[assetId] || 0;
+    const cost = price * Math.abs(amount);
+
+    if (amount > 0 && (myTeamData.budget || 0) < cost) return;
+    if (amount < 0 && (myTeamData.portfolio?.[assetId] || 0) < Math.abs(amount)) return;
+
+    const teamDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'teams', role);
+    await updateDoc(teamDocRef, {
+      budget: (myTeamData.budget || 0) - (price * amount),
+      [`portfolio.${assetId}`]: (myTeamData.portfolio?.[assetId] || 0) + amount
+    });
+  };
+
+  // --- Investment Timer Hook ---
+  useEffect(() => {
+    if (gameState?.phase === 'investment' && gameState?.timerStart) {
+      const interval = setInterval(async () => {
+        const elapsed = Math.floor((Date.now() - gameState.timerStart) / 1000);
+        const currentMin = Math.floor(elapsed / 60);
+        
+        if (currentMin > 0 && currentMin <= 7) {
+          const expectedPrice = gameState.priceHistory?.[currentMin];
+          if (expectedPrice && gameState.currentPrices?.flour !== expectedPrice.flour) {
+             if (role === 'admin') {
+               const gameDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'gameState', 'current');
+               await updateDoc(gameDocRef, { currentPrices: expectedPrice });
+             }
+          }
+        }
+
+        if (elapsed >= INVESTMENT_TIME) {
+          clearInterval(interval);
+          if (role === 'admin') {
+            const gameDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'gameState', 'current');
+            await updateDoc(gameDocRef, { phase: 'result' });
+          }
+        }
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [gameState?.phase, gameState?.timerStart, role, gameState?.priceHistory, gameState?.currentPrices]);
+
+  if (loading) return <div className="flex items-center justify-center h-screen bg-slate-900 text-white">데이터 동기화 중...</div>;
+
+  if (!role) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-white">
+        <div className="max-w-md w-full bg-slate-800 p-8 rounded-2xl shadow-2xl border border-slate-700">
+          <h1 className="text-3xl font-bold mb-6 text-center text-blue-400">투자 경연대회</h1>
+          <p className="text-slate-400 mb-8 text-center">역할을 선택하고 입장해주세요.</p>
+          <button 
+            onClick={() => setRole('admin')}
+            className="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold flex items-center justify-center gap-2 mb-4 transition-all"
+          >
+            <Users size={20} /> 관리자로 시작하기
+          </button>
+          <div className="grid grid-cols-2 gap-2">
+            {[1,2,3,4,5,6,7,8,9,10].map(n => (
+              <button 
+                key={n}
+                onClick={() => joinTeam(n)}
+                className="bg-slate-700 hover:bg-slate-600 py-3 rounded-lg font-semibold transition-all border border-slate-600"
+              >
+                {n}조 참가
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans">
+      <header className="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-50 shadow-md">
+        <div className="max-w-6xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-600 p-2 rounded-lg"><Coins className="text-white" /></div>
+            <div>
+              <h2 className="font-bold text-lg leading-tight">INVESTMENT GAME</h2>
+              <p className="text-xs text-slate-400 uppercase tracking-widest">
+                {role === 'admin' ? 'Administrator' : (myTeamData?.teamName || 'Team')}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            {gameState?.timerStart && (
+              <div className="flex items-center gap-2 bg-slate-800 px-4 py-2 rounded-full border border-slate-700">
+                <Timer size={18} className="text-blue-400" />
+                <span className="font-mono text-lg font-bold">
+                  {formatTime(Math.max(0, gameState.timerDuration - Math.floor((Date.now() - gameState.timerStart) / 1000)))}
+                </span>
+              </div>
+            )}
+            <button onClick={() => window.location.reload()} className="p-2 hover:bg-slate-800 rounded-lg text-slate-500"><RefreshCw size={20}/></button>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-6xl mx-auto p-4 md:p-6">
+        {role === 'admin' ? (
+          <AdminView 
+            gameState={gameState} 
+            allTeams={allTeams} 
+            startPasswordRound={startPasswordRound} 
+            startInvestmentPhase={startInvestmentPhase}
+            initializeGame={initializeGame}
+          />
+        ) : (
+          <ParticipantView 
+            gameState={gameState} 
+            myTeamData={myTeamData} 
+            submitPassword={submitPassword}
+            trade={trade}
+          />
+        )}
+      </main>
+    </div>
+  );
+}
+
+function AdminView({ gameState, allTeams, startPasswordRound, startInvestmentPhase, initializeGame }) {
+  const sortedTeams = useMemo(() => {
+    return [...allTeams].sort((a, b) => {
+      const aTotal = (a.budget || 0) + ASSETS.reduce((acc, asset) => acc + ((a.portfolio?.[asset.id] || 0) * (gameState?.currentPrices?.[asset.id] || 10000)), 0);
+      const bTotal = (b.budget || 0) + ASSETS.reduce((acc, asset) => acc + ((b.portfolio?.[asset.id] || 0) * (gameState?.currentPrices?.[asset.id] || 10000)), 0);
+      return bTotal - aTotal;
+    });
+  }, [allTeams, gameState?.currentPrices]);
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="lg:col-span-2 space-y-6">
+        <section className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl">
+          <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <Play size={20} className="text-blue-500" /> 게임 제어판
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 bg-slate-800 rounded-xl border border-slate-700">
+              <span className="text-sm text-slate-400 block mb-2">1단계: 비밀번호 게임 (총 5회)</span>
+              <button 
+                disabled={gameState?.phase === 'password' || gameState?.round >= 5 || gameState?.phase === 'investment'}
+                onClick={startPasswordRound}
+                className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 py-3 rounded-lg font-bold transition-all"
+              >
+                {gameState?.round < 5 ? `${(gameState?.round || 0) + 1}라운드 시작` : '비밀번호 라운드 종료'}
+              </button>
+            </div>
+            <div className="p-4 bg-slate-800 rounded-xl border border-slate-700">
+              <span className="text-sm text-slate-400 block mb-2">2단계: 투자 경연대회 (7분)</span>
+              <button 
+                disabled={(gameState?.phase !== 'lobby' && gameState?.round < 5) || gameState?.phase === 'investment'}
+                onClick={startInvestmentPhase}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 py-3 rounded-lg font-bold transition-all"
+              >
+                투자 경연 시작
+              </button>
+            </div>
+          </div>
+          <button onClick={initializeGame} className="mt-4 text-slate-500 hover:text-slate-300 text-sm flex items-center gap-1">
+            <RefreshCw size={14}/> 전체 초기화
+          </button>
+        </section>
+
+        <section className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl">
+          <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <Package size={20} className="text-amber-500" /> 현재 자산 시세
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {ASSETS.map(asset => (
+              <div key={asset.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                <div className="text-2xl mb-1">{asset.icon}</div>
+                <div className="text-slate-400 text-sm">{asset.name}</div>
+                <div className="text-lg font-bold font-mono">
+                  {(gameState?.currentPrices?.[asset.id] || 0).toLocaleString()}원
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <div className="space-y-6">
+        <section className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl">
+          <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <Trophy size={20} className="text-yellow-500" /> 실시간 팀 현황
+          </h3>
+          <div className="space-y-3">
+            {sortedTeams.map((team, idx) => {
+              const totalVal = (team.budget || 0) + ASSETS.reduce((acc, asset) => acc + ((team.portfolio?.[asset.id] || 0) * (gameState?.currentPrices?.[asset.id] || 10000)), 0);
+              return (
+                <div key={team.id} className="flex items-center justify-between p-3 bg-slate-800 rounded-xl border border-slate-700">
+                  <div className="flex items-center gap-3">
+                    <span className="w-6 h-6 flex items-center justify-center bg-slate-700 rounded-full text-xs font-bold">{idx+1}</span>
+                    <span className="font-semibold text-sm">{team.teamName}</span>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-mono text-emerald-400 font-bold text-sm">{totalVal.toLocaleString()}원</div>
+                    <div className="text-[10px] text-slate-500 uppercase">힌트: {team.hints?.length || 0}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function ParticipantView({ gameState, myTeamData, submitPassword, trade }) {
+  const [pwInput, setPwInput] = useState(['', '', '']);
+  const [msg, setMsg] = useState({ text: '', type: '' });
+
+  const handlePwSubmit = async () => {
+    if (pwInput.some(v => v === '')) return;
+    const correct = await submitPassword(pwInput);
+    if (correct) {
+      setMsg({ text: '축하합니다! 비밀번호를 맞혔습니다. A급 힌트 획득!', type: 'success' });
+    } else {
+      setMsg({ text: '오답입니다. B급 힌트가 지급됩니다.', type: 'error' });
+    }
+  };
+
+  if (gameState?.phase === 'lobby') {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <div className="w-20 h-20 bg-blue-600/20 rounded-full flex items-center justify-center mb-6 animate-pulse">
+          <Info className="text-blue-500" size={40} />
+        </div>
+        <h2 className="text-3xl font-bold mb-4">관리자의 시작을 기다리고 있습니다...</h2>
+        <p className="text-slate-400 max-w-md px-4 text-sm">화면을 끄지 말고 잠시만 대기해주세요. 보물상자 미션이 곧 시작됩니다!</p>
+      </div>
+    );
+  }
+
+  if (gameState?.phase === 'password') {
+    const isSolved = myTeamData?.solvedRounds?.includes(gameState.round);
+    return (
+      <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 px-2">
+        <div className="bg-slate-900 p-6 md:p-8 rounded-3xl border-2 border-blue-500 shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-5"><Lock size={80} /></div>
+          <div className="text-center mb-8">
+            <span className="bg-blue-600 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest mb-2 inline-block">ROUND {gameState.round} / 5</span>
+            <h3 className="text-2xl font-bold">보물 상자 암호 해독</h3>
+            <p className="text-slate-400 mt-2 text-sm">방정식의 해를 순서대로 입력하세요.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-3 mb-8">
+            {gameState.equations?.map((eq, i) => (
+              <div key={i} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex items-center justify-between">
+                <span className="text-slate-500 font-mono text-xs">Eq {i+1}</span>
+                <span className="text-xl font-bold font-mono text-blue-400">{eq}</span>
+              </div>
+            ))}
+          </div>
+          {!isSolved ? (
+            <div className="space-y-6">
+              <div className="flex justify-center gap-3">
+                {[0, 1, 2].map(i => (
+                  <input
+                    key={i}
+                    type="number"
+                    value={pwInput[i]}
+                    onChange={(e) => {
+                      const newPw = [...pwInput];
+                      newPw[i] = e.target.value.slice(-1);
+                      setPwInput(newPw);
+                    }}
+                    className="w-14 h-16 text-center text-3xl font-bold bg-slate-950 border-2 border-slate-700 rounded-xl focus:border-blue-500 outline-none transition-all"
+                  />
+                ))}
+              </div>
+              <button onClick={handlePwSubmit} className="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold text-lg shadow-lg">상자 열기</button>
+            </div>
+          ) : (
+            <div className="bg-emerald-900/30 border border-emerald-500/50 p-6 rounded-2xl text-center">
+              <div className="flex justify-center mb-2 text-emerald-400"><Unlock size={32}/></div>
+              <p className="font-bold text-emerald-400">해당 라운드 미션 완료!</p>
+              <p className="text-emerald-500/80 text-xs">관리자가 다음 라운드를 시작할 때까지 대기하세요.</p>
+            </div>
+          )}
+          {msg.text && (
+            <div className={`mt-6 p-4 rounded-xl text-center font-bold border text-sm ${msg.type === 'success' ? 'bg-emerald-900/20 border-emerald-500/50 text-emerald-400' : 'bg-rose-900/20 border-rose-500/50 text-rose-400'}`}>
+              {msg.text}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (gameState?.phase === 'investment' || gameState?.phase === 'result') {
+    const totalAssetValue = (myTeamData?.budget || 0) + ASSETS.reduce((acc, a) => acc + ((myTeamData?.portfolio?.[a.id] || 0) * (gameState.currentPrices?.[a.id] || 0)), 0);
+    
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-700 px-2">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-bold flex items-center gap-2"><TrendingUp size={20} className="text-emerald-500" /> 실시간 마켓</h3>
+              <div className="text-[10px] text-slate-500 bg-slate-800 px-2 py-1 rounded-full uppercase">1 Min Refresh</div>
+            </div>
+            <div className="grid grid-cols-1 gap-3">
+              {ASSETS.map(asset => {
+                const price = gameState.currentPrices?.[asset.id] || 0;
+                const myQty = myTeamData?.portfolio?.[asset.id] || 0;
+                return (
+                  <div key={asset.id} className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700 flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-slate-700 rounded-lg flex items-center justify-center text-xl">{asset.icon}</div>
+                      <div>
+                        <div className="font-bold text-sm">{asset.name}</div>
+                        <div className="text-[10px] text-slate-500">보유: {myQty}개</div>
+                      </div>
+                    </div>
+                    <div className="text-right flex-1 md:flex-none">
+                      <div className="text-xl font-mono font-bold text-white mb-2">{price.toLocaleString()}원</div>
+                      <div className="flex gap-2 justify-end">
+                        <button onClick={() => trade(asset.id, 1)} className="px-3 py-1 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 rounded-lg text-xs font-bold border border-emerald-600/30">매수 (+1)</button>
+                        <button onClick={() => trade(asset.id, -1)} className="px-3 py-1 bg-rose-600/20 hover:bg-rose-600/40 text-rose-400 rounded-lg text-xs font-bold border border-rose-600/30">매도 (-1)</button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl">
+            <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Info size={20} className="text-amber-500" /> 획득한 투자 힌트</h3>
+            <div className="space-y-2">
+              {myTeamData?.hints?.length > 0 ? (
+                myTeamData.hints.map((h, i) => (
+                  <div key={i} className={`p-4 rounded-xl border text-sm ${h.type === 'A' ? 'bg-amber-900/10 border-amber-500/30' : 'bg-slate-800 border-slate-700'}`}>
+                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold mb-2 inline-block ${h.type === 'A' ? 'bg-amber-500 text-black' : 'bg-slate-600 text-white'}`}>{h.type}급</span>
+                    <p className="leading-relaxed">{h.text}</p>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-6 text-slate-500 text-sm italic">획득한 힌트가 없습니다.</div>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="space-y-6">
+          <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl sticky top-24">
+            <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Coins size={20} className="text-yellow-500" /> 자산 요약</h3>
+            <div className="space-y-4">
+              <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800">
+                <span className="text-[10px] text-slate-500 block mb-1 uppercase tracking-tighter">Current Budget</span>
+                <div className="text-2xl font-mono font-bold text-emerald-400">{(myTeamData?.budget || 0).toLocaleString()}원</div>
+              </div>
+              <div className="space-y-2">
+                <span className="text-[10px] text-slate-500 px-1 uppercase tracking-tighter">Asset Breakdown</span>
+                {ASSETS.map(a => (
+                  <div key={a.id} className="flex justify-between items-center text-xs p-2 hover:bg-slate-800 rounded-lg">
+                    <span className="text-slate-400">{a.icon} {a.name} ({(myTeamData?.portfolio?.[a.id] || 0)})</span>
+                    <span className="font-mono font-semibold">{( (myTeamData?.portfolio?.[a.id] || 0) * (gameState.currentPrices?.[a.id] || 0) ).toLocaleString()}원</span>
+                  </div>
+                ))}
+                <div className="pt-2 mt-2 border-t border-slate-800 flex justify-between font-bold text-base px-2">
+                  <span>총 자산 합계</span>
+                  <span className="text-blue-400">{totalAssetValue.toLocaleString()}원</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          {gameState.phase === 'result' && (
+            <div className="bg-emerald-600 p-6 rounded-2xl text-center shadow-xl">
+              <Trophy size={40} className="mx-auto mb-3 text-emerald-100" />
+              <h4 className="text-xl font-bold mb-1">거래 종료</h4>
+              <p className="text-xs text-emerald-100 opacity-80">관리자 화면에서 순위를 확인하세요!</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
