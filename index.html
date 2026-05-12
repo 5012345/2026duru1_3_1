@@ -12,8 +12,16 @@ import {
   Coins, Package, Info, Play, RefreshCw, Trophy, ChevronRight
 } from 'lucide-react';
 
-// Firebase configuration from environment
-const firebaseConfig = JSON.parse(__firebase_config);
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyCB96k3FfAx7qWh7RUuvp00m3FnbHrdDN8",
+  authDomain: "duru10301.firebaseapp.com",
+  projectId: "duru10301",
+  storageBucket: "duru10301.firebasestorage.app",
+  messagingSenderId: "870062414256",
+  appId: "1:870062414256:web:a965fc9674c63367f21e75",
+  measurementId: "G-4HZ2KXPH5L"
+};
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
