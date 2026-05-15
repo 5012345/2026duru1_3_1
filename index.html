@@ -63,13 +63,13 @@
 
         const gameDocId = "global_game_session"; 
         const ADMIN_PASSWORD = "123123";
-        const PW_TIME_LIMIT = 60; // 기존 설정 (동적 계산으로 대체됨)
+        const PW_TIME_LIMIT = 60;
         const DAY_TIME_LIMIT = 60;
         const ASSETS = [
-            { id: 'flour', name: '밀가루', icon: '🍞' },
-            { id: 'oil', name: '석유', icon: '🛢️' },
-            { id: 'wood', name: '목재', icon: '🪵' },
-            { id: 'coke', name: '콜라', icon: '🥤' }
+            { id: 'flour', name: '밀가루', icon: '🍞', color: 'bg-amber-100' },
+            { id: 'oil', name: '석유', icon: '🛢️', color: 'bg-slate-700' },
+            { id: 'wood', name: '목재', icon: '🪵', color: 'bg-orange-200' },
+            { id: 'coke', name: '콜라', icon: '🥤', color: 'bg-rose-100' }
         ];
         const DAYS = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"];
 
@@ -84,50 +84,41 @@
             return <span className={className} style={{ fontSize: size, lineHeight: 1 }}>{emojiMap[name] || "💠"}</span>;
         };
 
-        const formatTerm = (coeff, varName, isFirst = false) => {
-            if (coeff === 0) return "";
-            let str = "";
-            if (coeff === 1) str = varName;
-            else if (coeff === -1) str = "-" + varName;
-            else str = coeff + varName;
-            
-            if (!isFirst && coeff > 0) return " + " + str;
-            if (!isFirst && coeff < 0) return " - " + str.substring(1);
-            return str;
-        };
-
-        const generateNormalPrice = () => {
-            const rand = (Math.random() + Math.random() + Math.random()) / 3; 
-            const min = 1000;
-            const max = 20000;
-            let price = Math.round((min + rand * (max - min)) / 1000) * 1000;
-            return Math.min(max, Math.max(min, price));
-        };
-
         const generateSystem = (difficulty) => {
-            const x = Math.floor(Math.random() * 9) + 1; // 1~9 한 자리 자연수
+            const x = Math.floor(Math.random() * 9) + 1; // 정답은 항상 1~9 자연수
 
             if (difficulty === 'green') {
-                // 아주 쉬운 일차방정식
                 const a = Math.floor(Math.random() * 9) + 1;
                 const b = Math.floor(Math.random() * 9) + 1;
                 const c = a * x + b;
-                const eq1 = `${a === 1 ? '' : a}x + ${b} = ${c}`;
-                return { eqs: [eq1], answer: [x] };
+                return { eqs: [`${a === 1 ? '' : a}x + ${b} = ${c}`], answer: [x] };
             } else if (difficulty === 'yellow') {
-                // 계수와 상수항이 2자리인 일차방정식
-                const a = Math.floor(Math.random() * 90) + 10;
-                const b = Math.floor(Math.random() * 90) + 10;
+                // 계수와 상수항이 1자리 또는 2자리 정수
+                const a = Math.floor(Math.random() * 98) + 1;
+                const b = Math.floor(Math.random() * 98) + 1;
                 const c = a * x + b;
-                const eq1 = `${a}x + ${b} = ${c}`;
-                return { eqs: [eq1], answer: [x] };
+                return { eqs: [`${a}x + ${b} = ${c}`], answer: [x] };
             } else {
-                // 괄호가 사용된 일차방정식
-                const a = Math.floor(Math.random() * 8) + 2;
-                const b = Math.floor(Math.random() * 9) + 1;
-                const c = a * (x + b);
-                const eq1 = `${a}(x + ${b}) = ${c}`;
-                return { eqs: [eq1], answer: [x] };
+                // 빨강: 괄호, 분수, 소수 중 랜덤
+                const type = Math.floor(Math.random() * 3);
+                if (type === 0) { // 괄호
+                    const a = Math.floor(Math.random() * 8) + 2;
+                    const b = Math.floor(Math.random() * 9) + 1;
+                    const c = a * (x + b);
+                    return { eqs: [`${a}(x + ${b}) = ${c}`], answer: [x] };
+                } else if (type === 1) { // 분수
+                    const bVal = [2, 4, 5][Math.floor(Math.random() * 3)];
+                    const targetX = (Math.floor(Math.random() * Math.floor(9 / bVal)) + 1) * bVal;
+                    const aVal = Math.floor(Math.random() * 3) + 1;
+                    const cVal = Math.floor(Math.random() * 5) + 1;
+                    const dVal = (aVal * targetX) / bVal + cVal;
+                    return { eqs: [`${aVal}/${bVal}x + ${cVal} = ${dVal}`], answer: [targetX] };
+                } else { // 소수
+                    const aVal = (Math.floor(Math.random() * 9) + 1) / 10;
+                    const bVal = (Math.floor(Math.random() * 20) + 1) / 10;
+                    const cVal = Number((aVal * x + bVal).toFixed(1));
+                    return { eqs: [`${aVal}x + ${bVal} = ${cVal}`], answer: [x] };
+                }
             }
         };
 
@@ -161,20 +152,15 @@
 
             useEffect(() => {
                 if (!audio1 || !audio2) return;
-                
                 if (!isBgmOn || role !== 'admin') {
-                    audio1.pause();
-                    audio2.pause();
+                    audio1.pause(); audio2.pause();
                     return;
                 }
-
                 const phase = gameState?.phase;
                 if (phase === 'investment' || phase === 'result') {
-                    audio1.pause();
-                    audio2.play().catch(e => console.log('BGM 재생 에러:', e));
+                    audio1.pause(); audio2.play().catch(e => console.log('BGM 재생 에러:', e));
                 } else {
-                    audio2.pause();
-                    audio1.play().catch(e => console.log('BGM 재생 에러:', e));
+                    audio2.pause(); audio1.play().catch(e => console.log('BGM 재생 에러:', e));
                 }
             }, [isBgmOn, gameState?.phase, audio1, audio2, role]);
 
@@ -185,11 +171,9 @@
                         clearInterval(interval);
                     }
                 }, 100);
-                
                 const timeout = setTimeout(() => {
                     if (!window.FirebaseBridge) setErrorMsg("네트워크 환경으로 인해 시스템 모듈을 불러오지 못했습니다.");
                 }, 10000);
-
                 return () => { clearInterval(interval); clearTimeout(timeout); };
             }, []);
 
@@ -199,51 +183,32 @@
                     const app = fb.initializeApp(firebaseConfig);
                     const db = fb.getFirestore(app);
                     const auth = fb.getAuth(app);
-                    
-                    fb.signInAnonymously(auth).catch(err => {
-                        console.error("Firebase Auth Error:", err);
-                        setErrorMsg(`인증 오류: ${err.message}`);
-                    });
-
+                    fb.signInAnonymously(auth).catch(err => setErrorMsg(`인증 오류: ${err.message}`));
                     const unsubGame = fb.onSnapshot(fb.doc(db, 'investment_game', 'state', 'public', gameDocId), (snap) => {
                         if (snap.exists()) setGameState(snap.data());
                     }, (err) => setErrorMsg(`데이터베이스 읽기 오류: ${err.message}`));
-
                     const unsubTeams = fb.onSnapshot(fb.collection(db, 'investment_game', 'teams', 'entries'), (snap) => {
                         setAllTeams(snap.docs.map(d => ({ id: d.id, ...d.data() })));
                         setLoading(false);
                     }, (err) => setErrorMsg(`팀 데이터 오류: ${err.message}`));
-
                     return () => { unsubGame(); unsubTeams(); };
-                } catch (err) {
-                    setErrorMsg(`초기화 치명적 오류: ${err.message}`);
-                }
+                } catch (err) { setErrorMsg(`초기화 치명적 오류: ${err.message}`); }
             }, [fb]);
 
             useEffect(() => {
-                if (role?.startsWith('team_')) {
-                    setMyTeamData(allTeams.find(t => t.id === role));
-                }
+                if (role?.startsWith('team_')) { setMyTeamData(allTeams.find(t => t.id === role)); }
             }, [allTeams, role]);
 
             useEffect(() => {
                 if (!fb || role !== 'admin' || !gameState) return;
                 const db = fb.getFirestore();
-
                 if (gameState.phase === 'password' && allTeams.length > 0) {
                     const allSolved = allTeams.every(t => t.solvedRounds?.includes(gameState.round));
-                    if (allSolved) {
-                        fb.updateDoc(fb.doc(db, 'investment_game', 'state', 'public', gameDocId), { 
-                            phase: 'round_result', readyTeams: [] 
-                        });
-                    }
+                    if (allSolved) { fb.updateDoc(fb.doc(db, 'investment_game', 'state', 'public', gameDocId), { phase: 'round_result', readyTeams: [] }); }
                 }
-
                 if (gameState.phase === 'round_result' && allTeams.length > 0) {
                     const allReady = allTeams.every(t => gameState.readyTeams?.includes(t.id));
-                    if (allReady && gameState.round < 5) {
-                        startNextRound();
-                    }
+                    if (allReady && gameState.round < 5) { startNextRound(); }
                 }
             }, [allTeams, gameState, fb, role]);
 
@@ -253,19 +218,15 @@
                         const elapsed = Math.floor((Date.now() - gameState.timerStart) / 1000);
                         const remaining = Math.max(0, (gameState.timerDuration || 0) - elapsed);
                         setTimeLeft(remaining);
-
                         if (role === 'admin') {
                             if (gameState.phase === 'investment') {
                                 const dayIdx = Math.min(6, Math.floor(elapsed / DAY_TIME_LIMIT));
                                 if (gameState.currentDayIdx !== dayIdx) {
                                     fb.updateDoc(fb.doc(fb.getFirestore(), 'investment_game', 'state', 'public', gameDocId), {
-                                        currentDayIdx: dayIdx,
-                                        currentPrices: gameState.priceHistory[dayIdx]
+                                        currentDayIdx: dayIdx, currentPrices: gameState.priceHistory[dayIdx]
                                     });
                                 }
-                                if (remaining <= 0) {
-                                    fb.updateDoc(fb.doc(fb.getFirestore(), 'investment_game', 'state', 'public', gameDocId), { phase: 'result' });
-                                }
+                                if (remaining <= 0) { fb.updateDoc(fb.doc(fb.getFirestore(), 'investment_game', 'state', 'public', gameDocId), { phase: 'result' }); }
                             }
                             if (gameState.phase === 'password' && remaining <= 0) {
                                 fb.updateDoc(fb.doc(fb.getFirestore(), 'investment_game', 'state', 'public', gameDocId), { phase: 'round_result', readyTeams: [] });
@@ -279,23 +240,18 @@
             const startNextRound = async () => {
                 const db = fb.getFirestore();
                 const nextRound = (gameState?.round || 0) + 1;
-                const currentDuration = 110 - nextRound * 10; // 1라운드 100초부터 10초씩 단축
+                const currentDuration = 110 - nextRound * 10;
                 const q1 = generateSystem('green');
                 const q2 = generateSystem('yellow');
                 const q3 = generateSystem('red');
-                
                 let history = gameState?.priceHistory || [];
                 if (nextRound === 1 || !history.length) {
                     history = [{ flour: 10000, oil: 10000, wood: 10000, coke: 10000 }];
-                    let curr = history[0];
                     for (let i = 1; i <= 7; i++) {
-                        const next = {};
-                        ASSETS.forEach(a => { next[a.id] = generateNormalPrice(); });
+                        const next = {}; ASSETS.forEach(a => { next[a.id] = generateNormalPrice(); });
                         history.push(next);
-                        curr = next;
                     }
                 }
-
                 await fb.updateDoc(fb.doc(db, 'investment_game', 'state', 'public', gameDocId), {
                     phase: 'password', round: nextRound, questions: [q1, q2, q3],
                     answers: [...q1.answer, ...q2.answer, ...q3.answer],
@@ -305,13 +261,10 @@
 
             const startInvestment = async () => {
                 const db = fb.getFirestore();
-                const firstPrices = gameState.priceHistory && gameState.priceHistory[0] ? gameState.priceHistory[0] : { flour: 10000, oil: 10000, wood: 10000, coke: 10000 };
+                const firstPrices = gameState.priceHistory?.[0] || { flour: 10000, oil: 10000, wood: 10000, coke: 10000 };
                 await fb.updateDoc(fb.doc(db, 'investment_game', 'state', 'public', gameDocId), {
-                    phase: 'investment',
-                    currentDayIdx: 0,
-                    timerStart: Date.now(),
-                    timerDuration: DAY_TIME_LIMIT * 7,
-                    currentPrices: firstPrices
+                    phase: 'investment', currentDayIdx: 0, timerStart: Date.now(),
+                    timerDuration: DAY_TIME_LIMIT * 7, currentPrices: firstPrices
                 });
             };
 
@@ -342,10 +295,8 @@
             const submitPassword = async (input) => {
                 const isCorrect = input.map(Number).join(',') === (gameState.answers || []).join(',');
                 const newHint = { type: isCorrect ? 'A' : 'B', id: Date.now().toString() + Math.random().toString() };
-
                 await fb.updateDoc(fb.doc(fb.getFirestore(), 'investment_game', 'teams', 'entries', role), {
-                    lastRoundCorrect: isCorrect, solvedRounds: fb.arrayUnion(gameState.round),
-                    hints: fb.arrayUnion(newHint)
+                    lastRoundCorrect: isCorrect, solvedRounds: fb.arrayUnion(gameState.round), hints: fb.arrayUnion(newHint)
                 });
             };
 
@@ -359,8 +310,8 @@
             };
 
             if (errorMsg) return (
-                <div className="h-screen flex items-center justify-center p-6 text-center">
-                    <div className="bg-slate-900 border border-rose-500 p-8 rounded-2xl max-w-lg shadow-2xl">
+                <div className="h-screen flex items-center justify-center p-4">
+                    <div className="bg-slate-900 border border-rose-500 p-8 rounded-2xl max-w-lg shadow-2xl text-center">
                         <SafeIcon name="AlertCircle" className="text-rose-500 mx-auto mb-4" size={48} />
                         <h2 className="text-xl font-bold text-rose-500 mb-2">시스템 오류 발생</h2>
                         <p className="text-slate-400 text-sm">{errorMsg}</p>
@@ -373,69 +324,40 @@
             if (!role) return (
                 <div className="h-screen flex items-center justify-center p-4 relative">
                     <div className="max-w-sm w-full bg-slate-900 p-8 rounded-3xl border border-slate-800 shadow-2xl fade-in text-center z-10">
-                        <h1 className="text-2xl font-black bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent uppercase mb-6 leading-tight">연립방정식<br/>투자 경연대회</h1>
-                        
-                        <button onClick={() => setShowRules(true)} className="w-full bg-slate-800 py-3 rounded-2xl font-bold mb-4 flex items-center justify-center gap-2 border border-slate-700 hover:bg-slate-700 transition-all text-blue-400">
-                            <SafeIcon name="Info" /> 게임 규칙 보기
-                        </button>
-                        <button onClick={() => setShowAdminLogin(true)} className="w-full bg-slate-800 py-3 rounded-2xl font-bold mb-6 flex items-center justify-center gap-2 border border-slate-700 hover:bg-slate-700 transition-all">
-                            <SafeIcon name="Lock" /> 관리자 접속
-                        </button>
-
+                        <h1 className="text-2xl font-black bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent uppercase mb-6 leading-tight">일차방정식<br/>투자 경연대회</h1>
+                        <button onClick={() => setShowRules(true)} className="w-full bg-slate-800 py-3 rounded-2xl font-bold mb-4 flex items-center justify-center gap-2 border border-slate-700 hover:bg-slate-700 transition-all text-blue-400"><SafeIcon name="Info" /> 게임 규칙 보기</button>
+                        <button onClick={() => setShowAdminLogin(true)} className="w-full bg-slate-800 py-3 rounded-2xl font-bold mb-6 flex items-center justify-center gap-2 border border-slate-700 hover:bg-slate-700 transition-all"><SafeIcon name="Lock" /> 관리자 접속</button>
                         <div className="grid grid-cols-2 gap-2">
                             {[1,2,3,4,5,6,7,8,9,10].map(n => <button key={n} onClick={() => joinTeam(n)} className="bg-slate-800 py-3 rounded-xl border border-slate-700 font-bold hover:bg-blue-600 transition-all">{n}조 참가</button>)}
                         </div>
                     </div>
-
-                    {/* 규칙 안내 모달창 */}
                     {showRules && (
                         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[200] p-6 overflow-y-auto" onClick={() => setShowRules(false)}>
                             <div className="max-w-xl mx-auto bg-slate-900 border border-slate-700 p-8 rounded-3xl mt-10 shadow-2xl fade-in" onClick={e => e.stopPropagation()}>
-                                <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
-                                    <h3 className="font-black text-2xl flex items-center gap-2 text-emerald-400"><SafeIcon name="Info"/> 게임 규칙 안내</h3>
-                                    <button onClick={() => setShowRules(false)} className="text-slate-500 hover:text-rose-500 transition-colors"><SafeIcon name="X" size={24}/></button>
-                                </div>
+                                <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4"><h3 className="font-black text-2xl flex items-center gap-2 text-emerald-400"><SafeIcon name="Info"/> 게임 규칙 안내</h3><button onClick={() => setShowRules(false)} className="text-slate-500 hover:text-rose-500"><SafeIcon name="X" size={24}/></button></div>
                                 <div className="space-y-6 text-slate-300 text-sm leading-relaxed">
-                                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800">
-                                        <h4 className="font-bold text-lg text-blue-400 mb-2">1페이즈: 정보 해독 미션</h4>
+                                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800"><h4 className="font-bold text-lg text-blue-400 mb-2">1페이즈: 정보 해독 미션</h4>
                                         <ul className="list-disc pl-5 space-y-1">
-                                            <li>각 조는 제한시간(1라운드 100초부터 라운드마다 10초씩 단축) 내에 3개의 일차방정식을 풀어야 합니다.</li>
-                                            <li>정답을 맞히면 최고급 정보인 <span className="text-amber-500 font-bold">A급 힌트</span>를 획득합니다.</li>
-                                            <li>시간 초과 또는 오답 시 <span className="text-slate-400 font-bold">B급 힌트</span>를 획득합니다.</li>
+                                            <li>각 조는 제한시간 내에 3개의 일차방정식을 풀어야 합니다.</li>
+                                            <li>정답을 맞히면 <span className="text-amber-500 font-bold">A급 힌트</span>, 오답 시 <span className="text-slate-400 font-bold">B급 힌트</span>를 획득합니다.</li>
                                         </ul>
                                     </div>
-                                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800">
-                                        <h4 className="font-bold text-lg text-emerald-400 mb-2">2페이즈: 투자 경연</h4>
+                                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800"><h4 className="font-bold text-lg text-emerald-400 mb-2">2페이즈: 투자 경연</h4>
                                         <ul className="list-disc pl-5 space-y-1">
-                                            <li>투자는 월요일부터 일요일까지, 매일 <span className="font-bold text-white">1분씩</span> 진행됩니다.</li>
-                                            <li>4가지 자원(밀가루, 석유, 목재, 콜라)의 가격이 매일 무작위로 변동됩니다.</li>
-                                            <li>주어진 기본 자본금을 활용해 자원을 사고팔아 자산을 불리세요.</li>
-                                            <li><span className="text-rose-400 font-bold">주의:</span> 일요일이 끝나기 전에 보유한 모든 자원을 현금화해야 합니다!</li>
-                                        </ul>
-                                    </div>
-                                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800">
-                                        <h4 className="font-bold text-lg text-amber-500 mb-2">힌트 카드 사용법</h4>
-                                        <ul className="list-disc pl-5 space-y-1">
-                                            <li>힌트는 언제든 사용 가능한 <span className="font-bold text-rose-400">소모성 아이템</span>입니다.</li>
-                                            <li><span className="text-amber-500 font-bold">A급 힌트</span>: 다음 요일의 '모든 자원(4개)' 변동 가격을 알려줍니다.</li>
-                                            <li><span className="text-slate-400 font-bold">B급 힌트</span>: 다음 요일의 '무작위 2개 자원' 변동 가격을 알려줍니다.</li>
-                                            <li>한 번 확인한 힌트는 우측 상단의 '열람 기록' 버튼을 통해 다시 볼 수 있습니다.</li>
+                                            <li>7일 동안 매일 1분씩 진행되며 자원 가격이 변동됩니다.</li>
+                                            <li>일요일이 끝나기 전에 모든 자원을 현금화해야 합니다!</li>
                                         </ul>
                                     </div>
                                 </div>
-                                <button onClick={() => setShowRules(false)} className="w-full mt-6 bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold transition text-white">확인 완료</button>
+                                <button onClick={() => setShowRules(false)} className="w-full mt-6 bg-blue-600 py-4 rounded-xl font-bold">확인 완료</button>
                             </div>
                         </div>
                     )}
-
                     {showAdminLogin && (
                         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[100] flex items-center justify-center">
-                            <div className="bg-slate-900 p-8 rounded-3xl w-80 shadow-2xl border border-slate-800 fade-in">
+                            <div className="bg-slate-900 p-8 rounded-3xl w-80 shadow-2xl border border-slate-800">
                                 <input type="password" placeholder="비밀번호" value={adminPwInput} onChange={e => setAdminPwInput(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl mb-4 text-center text-xl font-bold" />
-                                <div className="flex gap-2">
-                                    <button onClick={() => setShowAdminLogin(false)} className="flex-1 bg-slate-800 py-4 rounded-xl font-bold text-slate-400">취소</button>
-                                    <button onClick={() => { if(adminPwInput===ADMIN_PASSWORD) setRole('admin'); setShowAdminLogin(false); }} className="flex-1 bg-blue-600 py-4 rounded-xl font-bold">확인</button>
-                                </div>
+                                <div className="flex gap-2"><button onClick={() => setShowAdminLogin(false)} className="flex-1 bg-slate-800 py-4 rounded-xl font-bold text-slate-400">취소</button><button onClick={() => { if(adminPwInput===ADMIN_PASSWORD) setRole('admin'); setShowAdminLogin(false); }} className="flex-1 bg-blue-600 py-4 rounded-xl font-bold">확인</button></div>
                             </div>
                         </div>
                     )}
@@ -445,20 +367,8 @@
             return (
                 <div className="min-h-screen flex flex-col">
                     <header className="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 p-4 sticky top-0 z-50 flex justify-between items-center">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-blue-600 p-2 rounded-xl"><SafeIcon name="Coins" size={20}/></div>
-                            <div>
-                                <h2 className="font-bold text-sm">연립방정식 투자 경연대회</h2>
-                                <p className="text-[10px] text-blue-500 font-bold uppercase">{role === 'admin' ? '관리자' : myTeamData?.teamName}</p>
-                            </div>
-                        </div>
-
-                        {role === 'admin' && (
-                            <button onClick={() => setIsBgmOn(!isBgmOn)} className={`flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs font-bold transition-all shadow-lg ${isBgmOn ? 'bg-amber-500/20 border-amber-500 text-amber-500' : 'bg-slate-800 border-slate-700 text-slate-500'}`}>
-                                <SafeIcon name={isBgmOn ? "Volume2" : "VolumeX"} size={16}/> {isBgmOn ? "BGM 켜짐" : "BGM 꺼짐"}
-                            </button>
-                        )}
-
+                        <div className="flex items-center gap-3"><div className="bg-blue-600 p-2 rounded-xl"><SafeIcon name="Coins" size={20}/></div><div><h2 className="font-bold text-sm">일차방정식 투자 경연대회</h2><p className="text-[10px] text-blue-500 font-bold uppercase">{role === 'admin' ? '관리자' : myTeamData?.teamName}</p></div></div>
+                        {role === 'admin' && (<button onClick={() => setIsBgmOn(!isBgmOn)} className={`flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs font-bold transition-all shadow-lg ${isBgmOn ? 'bg-amber-500/20 border-amber-500 text-amber-500' : 'bg-slate-800 border-slate-700 text-slate-500'}`}><SafeIcon name={isBgmOn ? "Volume2" : "VolumeX"} size={16}/> {isBgmOn ? "BGM 켜짐" : "BGM 꺼짐"}</button>)}
                         {gameState?.timerStart && (
                             <div className="bg-slate-950 px-4 py-2 rounded-2xl font-mono text-xl border border-slate-800 text-blue-400 flex items-center gap-2">
                                 <span className="text-xs text-slate-500 font-sans mr-1">{gameState.phase === 'investment' ? DAYS[gameState.currentDayIdx] : ''}</span>
@@ -475,94 +385,43 @@
                             </div>
                         )}
                     </header>
-
                     <main className="flex-1 p-4 max-w-5xl mx-auto w-full fade-in flex flex-col items-center">
                         {role === 'admin' ? (
                             gameState?.phase === 'result' ? (
                                 <div className="w-full flex flex-col items-center justify-center space-y-8 py-10 fade-in">
-                                    <div className="text-center mb-4">
-                                        <h2 className="text-5xl font-black text-amber-400 mb-4 animate-bounce">🎉 투자 경연대회 최종 결과 🎉</h2>
-                                        <p className="text-slate-400 text-lg font-bold">모든 투자 일정이 종료되었습니다.</p>
-                                    </div>
+                                    <div className="text-center mb-4"><h2 className="text-5xl font-black text-amber-400 mb-4 animate-bounce">🎉 투자 경연대회 최종 결과 🎉</h2></div>
                                     <div className="w-full max-w-4xl space-y-4">
-                                        <div className="flex justify-between p-4 px-8 text-slate-500 font-black border-b border-slate-800 mb-2">
-                                            <span className="w-24 text-center">순위</span>
-                                            <span className="flex-1 text-center">참가조</span>
-                                            <span className="w-48 text-right">최종 자산</span>
-                                        </div>
                                         {[...allTeams].sort((a,b) => {
                                             const getWorth = (t) => (t.budget || 0) + ASSETS.reduce((acc, ast) => acc + (t.portfolio?.[ast.id] || 0) * (gameState?.currentPrices?.[ast.id] || 10000), 0);
                                             return getWorth(b) - getWorth(a);
                                         }).map((t, i) => {
                                             const worth = (t.budget || 0) + ASSETS.reduce((acc, ast) => acc + (t.portfolio?.[ast.id] || 0) * (gameState?.currentPrices?.[ast.id] || 10000), 0);
                                             const isWinner = i === 0;
-                                            return (
-                                                <div key={t.id} className={`flex justify-between items-center px-8 py-6 rounded-2xl border transition-all ${isWinner ? 'bg-amber-500/10 glow-gold scale-105 z-10 relative my-8 shadow-2xl shadow-amber-500/20' : 'bg-slate-900 border-slate-800 hover:bg-slate-800/40'}`}>
-                                                    <span className={`w-24 text-center font-black text-2xl ${isWinner ? 'text-amber-500' : 'text-slate-400'}`}>{i+1}위</span>
-                                                    <span className={`flex-1 text-center font-black text-3xl ${isWinner ? 'text-amber-400' : 'text-slate-200'}`}>{t.teamName} {isWinner && '👑'}</span>
-                                                    <span className={`w-48 font-mono font-black text-3xl text-right ${isWinner ? 'text-amber-400' : 'text-emerald-400'}`}>{worth.toLocaleString()}원</span>
-                                                </div>
-                                            )
+                                            return (<div key={t.id} className={`flex justify-between items-center px-8 py-6 rounded-2xl border transition-all ${isWinner ? 'bg-amber-500/10 glow-gold scale-105 z-10 relative my-8' : 'bg-slate-900 border-slate-800'}`}><span className={`w-24 text-center font-black text-2xl ${isWinner ? 'text-amber-500' : 'text-slate-400'}`}>{i+1}위</span><span className={`flex-1 text-center font-black text-3xl ${isWinner ? 'text-amber-400' : 'text-slate-200'}`}>{t.teamName}</span><span className={`w-48 font-mono font-black text-3xl text-right ${isWinner ? 'text-amber-400' : 'text-emerald-400'}`}>{worth.toLocaleString()}원</span></div>)
                                         })}
                                     </div>
-                                    <button onClick={resetGame} className="mt-12 bg-slate-800 hover:bg-slate-700 px-8 py-4 rounded-xl font-bold transition text-white border border-slate-700">시스템 초기화</button>
+                                    <button onClick={resetGame} className="mt-12 bg-slate-800 px-8 py-4 rounded-xl font-bold">시스템 초기화</button>
                                 </div>
                             ) : (
                                 <div className="space-y-6 w-full">
-                                    <section className="bg-slate-900 p-6 rounded-3xl border border-slate-800">
-                                        <h3 className="text-xs font-bold text-blue-400 mb-6 uppercase tracking-widest">게임 관리</h3>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <button onClick={startNextRound} disabled={gameState?.round >= 5} className="bg-blue-600 py-4 rounded-2xl font-bold shadow-lg disabled:opacity-50">
-                                                {gameState?.round >= 5 ? "미션 종료" : `미션 ${(gameState?.round || 0) + 1} 시작`}
-                                            </button>
-                                            <button onClick={startInvestment} className="bg-emerald-600 py-4 rounded-2xl font-bold shadow-lg">투자 시작</button>
-                                        </div>
-                                        <button onClick={resetGame} className="mt-4 text-[10px] text-rose-500 font-black uppercase tracking-widest w-full text-right">시스템 초기화</button>
+                                    <section className="bg-slate-900 p-6 rounded-3xl border border-slate-800"><h3 className="text-xs font-bold text-blue-400 mb-6 uppercase tracking-widest">게임 관리</h3>
+                                        <div className="grid grid-cols-2 gap-4"><button onClick={startNextRound} disabled={gameState?.round >= 5} className="bg-blue-600 py-4 rounded-2xl font-bold disabled:opacity-50">{gameState?.round >= 5 ? "미션 종료" : `미션 ${(gameState?.round || 0) + 1} 시작`}</button><button onClick={startInvestment} className="bg-emerald-600 py-4 rounded-2xl font-bold">투자 시작</button></div>
                                     </section>
-
-                                    {gameState?.phase === 'password' && (
-                                        <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800">
-                                            <h3 className="text-xs font-bold text-emerald-400 mb-4 uppercase flex items-center gap-2">
-                                                <SafeIcon name="Check" size={16}/> {gameState.round}라운드 비밀번호 제출 현황
-                                            </h3>
-                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                                                {allTeams.map(t => {
-                                                    const isSolved = t.solvedRounds?.includes(gameState.round);
-                                                    return (
-                                                        <div key={t.id} className={`p-4 rounded-2xl border flex flex-col items-center text-center gap-2 transition-all shadow-md ${isSolved ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : 'bg-slate-800 border-slate-700 text-slate-500'}`}>
-                                                            <SafeIcon name={isSolved ? "Unlock" : "Lock"} size={24}/>
-                                                            <span className="text-sm font-black">{t.teamName}</span>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    )}
-
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800">
-                                            <h3 className="text-xs font-bold text-yellow-500 mb-4 uppercase">실시간 순위</h3>
+                                        <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800"><h3 className="text-xs font-bold text-yellow-500 mb-4 uppercase">실시간 순위</h3>
                                             {[...allTeams].sort((a,b) => {
-                                                const valA = gameState?.phase === 'investment' ? (a.budget || 0) : (a.budget || 0) + ASSETS.reduce((acc, ast) => acc + (a.portfolio?.[ast.id] || 0) * (gameState?.currentPrices?.[ast.id] || 10000), 0);
-                                                const valB = gameState?.phase === 'investment' ? (b.budget || 0) : (b.budget || 0) + ASSETS.reduce((acc, ast) => acc + (b.portfolio?.[ast.id] || 0) * (gameState?.currentPrices?.[ast.id] || 10000), 0);
+                                                const valA = (a.budget || 0) + ASSETS.reduce((acc, ast) => acc + (a.portfolio?.[ast.id] || 0) * (gameState?.currentPrices?.[ast.id] || 10000), 0);
+                                                const valB = (b.budget || 0) + ASSETS.reduce((acc, ast) => acc + (b.portfolio?.[ast.id] || 0) * (gameState?.currentPrices?.[ast.id] || 10000), 0);
                                                 return valB - valA;
-                                            }).map((t, i) => {
-                                                const displayValue = gameState?.phase === 'investment' ? (t.budget || 0) : (t.budget || 0) + ASSETS.reduce((acc, ast) => acc + (t.portfolio?.[ast.id] || 0) * (gameState?.currentPrices?.[ast.id] || 10000), 0);
-                                                return (
-                                                    <div key={t.id} className="flex justify-between p-3 bg-slate-800/40 rounded-xl mb-2 border border-slate-800 text-sm">
-                                                        <span>{i+1}. {t.teamName}</span>
-                                                        <span className="text-emerald-400 font-mono">{displayValue.toLocaleString()}원</span>
-                                                    </div>
-                                                );
-                                            })}
+                                            }).map((t, i) => (<div key={t.id} className="flex justify-between p-3 bg-slate-800/40 rounded-xl mb-2 border border-slate-800 text-sm"><span>{i+1}. {t.teamName}</span><span className="text-emerald-400 font-mono">{((t.budget || 0) + ASSETS.reduce((acc, ast) => acc + (t.portfolio?.[ast.id] || 0) * (gameState?.currentPrices?.[ast.id] || 10000), 0)).toLocaleString()}원</span></div>))}
                                         </div>
-                                        <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800">
-                                            <h3 className="text-xs font-bold text-blue-400 mb-4 uppercase">시장 가격</h3>
+                                        <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800"><h3 className="text-xs font-bold text-blue-400 mb-4 uppercase">시장 가격</h3>
                                             <div className="grid grid-cols-2 gap-2">
                                                 {ASSETS.map(a => (
-                                                    <div key={a.id} className="bg-slate-800/40 p-4 rounded-xl border border-slate-800 text-center">
-                                                        <div className="text-2xl mb-1">{a.icon}</div>
-                                                        <div className="text-lg font-black font-mono">{(gameState?.currentPrices?.[a.id] || 0).toLocaleString()}</div>
+                                                    <div key={a.id} className="bg-slate-800/60 p-6 rounded-2xl border border-slate-700 text-center flex flex-col items-center">
+                                                        <div className={`w-16 h-16 ${a.color} rounded-2xl flex items-center justify-center text-4xl mb-3 shadow-inner`}>{a.icon}</div>
+                                                        <div className="text-xs text-slate-500 font-bold mb-1 uppercase tracking-tighter">{a.name}</div>
+                                                        <div className="text-xl font-black font-mono text-white">{(gameState?.currentPrices?.[a.id] || 0).toLocaleString()}</div>
                                                     </div>
                                                 ))}
                                             </div>
@@ -571,11 +430,7 @@
                                 </div>
                             )
                         ) : (
-                            <TeamUI 
-                                gameState={gameState} role={role} myTeamData={myTeamData} allTeams={allTeams}
-                                submitPassword={submitPassword} trade={trade} timeLeft={timeLeft}
-                                fb={fb}
-                            />
+                            <TeamUI gameState={gameState} role={role} myTeamData={myTeamData} allTeams={allTeams} submitPassword={submitPassword} trade={trade} timeLeft={timeLeft} fb={fb} />
                         )}
                     </main>
                 </div>
@@ -586,7 +441,6 @@
             const [input, setInput] = useState(['','','']);
             const [isBlackout, setIsBlackout] = useState(false);
             const [selectedHint, setSelectedHint] = useState(null);
-            
             const [confirmHintType, setConfirmHintType] = useState(null);
             const [showHistory, setShowHistory] = useState(false);
 
@@ -601,49 +455,21 @@
             const handleUseHint = async (type) => {
                 const available = myTeamData?.hints?.filter(h => h.type === type) || [];
                 if (available.length === 0) return;
-
                 const hintToRemove = available[0];
                 const nextDayIdx = gameState.currentDayIdx + 1;
-                let hintText = "";
-                let tDay = "";
-
-                if (nextDayIdx > 6) {
-                    hintText = "대회가 곧 종료됩니다. 내일의 시장 변동 정보가 없습니다.";
-                    tDay = "대회 종료 임박";
-                } else {
-                    tDay = DAYS[nextDayIdx];
-                    const prices = gameState.priceHistory[nextDayIdx];
-                    if (type === 'A') {
-                        ASSETS.forEach(a => hintText += `${a.name}: ${prices[a.id].toLocaleString()}원\n`);
-                    } else {
-                        const shuf = [...ASSETS].sort(() => 0.5 - Math.random());
-                        hintText += `${shuf[0].name}: ${prices[shuf[0].id].toLocaleString()}원\n${shuf[1].name}: ${prices[shuf[1].id].toLocaleString()}원`;
-                    }
+                let hintText = ""; let tDay = "";
+                if (nextDayIdx > 6) { hintText = "대회가 곧 종료됩니다."; tDay = "종료 임박"; }
+                else {
+                    tDay = DAYS[nextDayIdx]; const prices = gameState.priceHistory[nextDayIdx];
+                    if (type === 'A') { ASSETS.forEach(a => hintText += `${a.name}: ${prices[a.id].toLocaleString()}원\n`); }
+                    else { const shuf = [...ASSETS].sort(() => 0.5 - Math.random()); hintText += `${shuf[0].name}: ${prices[shuf[0].id].toLocaleString()}원\n${shuf[1].name}: ${prices[shuf[1].id].toLocaleString()}원`; }
                 }
-
                 const newUsedHint = { type, text: hintText, targetDay: tDay, id: Date.now().toString() };
-                const newHints = myTeamData.hints.filter(h => h.id !== hintToRemove.id);
-
-                await fb.updateDoc(fb.doc(fb.getFirestore(), 'investment_game', 'teams', 'entries', role), {
-                    hints: newHints,
-                    usedHints: fb.arrayUnion(newUsedHint)
-                });
-
-                setConfirmHintType(null);
-                setSelectedHint(newUsedHint); 
+                await fb.updateDoc(fb.doc(fb.getFirestore(), 'investment_game', 'teams', 'entries', role), { hints: myTeamData.hints.filter(h => h.id !== hintToRemove.id), usedHints: fb.arrayUnion(newUsedHint) });
+                setConfirmHintType(null); setSelectedHint(newUsedHint); 
             };
 
-            if (!gameState || gameState.phase === 'lobby') {
-                return (
-                    <div className="h-full py-20 flex flex-col items-center gap-6 text-center fade-in w-full">
-                        <div className="bg-blue-600/10 p-8 rounded-full animate-pulse border border-blue-500/20">
-                            <SafeIcon name="RefreshCw" size={64} className="text-blue-500" />
-                        </div>
-                        <h2 className="text-2xl font-black tracking-tighter">참가 완료.</h2>
-                        <p className="text-slate-500 text-sm leading-relaxed">관리자의 시작 신호를 기다리세요.</p>
-                    </div>
-                );
-            }
+            if (!gameState || gameState.phase === 'lobby') return (<div className="h-full py-20 flex flex-col items-center gap-6 text-center w-full"><div className="bg-blue-600/10 p-8 rounded-full animate-pulse border border-blue-500/20"><SafeIcon name="RefreshCw" size={64} className="text-blue-500" /></div><h2 className="text-2xl font-black">참가 완료.</h2><p className="text-slate-500 text-sm">관리자의 시작 신호를 기다리세요.</p></div>);
 
             if (gameState.phase === 'investment' || gameState.phase === 'result') {
                 const currentPrices = gameState.currentPrices || { flour: 10000, oil: 10000, wood: 10000, coke: 10000 };
@@ -652,144 +478,38 @@
                     const getW = (t) => (t.budget || 0) + ASSETS.reduce((acc, ast) => acc + (t.portfolio?.[ast.id] || 0) * (currentPrices[ast.id] || 10000), 0);
                     return getW(b) - getW(a);
                 });
-                const isWinner = gameState.phase === 'result' && sorted[0]?.id === role;
-
-                const aHints = myTeamData?.hints?.filter(h => h.type === 'A') || [];
-                const bHints = myTeamData?.hints?.filter(h => h.type === 'B') || [];
-
                 return (
                     <div className="relative w-full">
-                        <div className={`blackout-overlay ${isBlackout ? 'active' : ''}`}>
-                            <div className="text-center">
-                                <h1 className="text-4xl font-black text-white mb-2">{DAYS[gameState.currentDayIdx]}이 되었습니다</h1>
-                                <p className="text-blue-400 font-bold tracking-widest animate-pulse">시장을 분석하십시오...</p>
-                            </div>
-                        </div>
-
+                        <div className={`blackout-overlay ${isBlackout ? 'active' : ''}`}><h1 className="text-4xl font-black text-white">{DAYS[gameState.currentDayIdx]}이 되었습니다</h1></div>
                         {showHistory && (
                             <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[200] p-6 overflow-y-auto" onClick={() => setShowHistory(false)}>
-                                <div className="max-w-lg mx-auto bg-slate-900 border border-slate-700 p-8 rounded-3xl mt-10 shadow-2xl fade-in" onClick={e => e.stopPropagation()}>
-                                    <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
-                                        <h3 className="font-black text-xl flex items-center gap-2 text-white"><SafeIcon name="History"/> 힌트 열람 기록</h3>
-                                        <button onClick={() => setShowHistory(false)} className="text-slate-500 hover:text-rose-500 transition-colors"><SafeIcon name="X" size={24}/></button>
-                                    </div>
-                                    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-                                        {!(myTeamData?.usedHints?.length) ? <p className="text-slate-500 text-center py-10 font-bold">사용된 힌트가 없습니다.</p> :
-                                            [...myTeamData.usedHints].reverse().map(h => (
-                                                <div key={h.id} className="bg-slate-950 p-5 rounded-2xl border border-slate-800">
-                                                    <p className={`text-xs mb-2 font-black inline-block px-2 py-1 rounded-md ${h.type === 'A' ? 'bg-amber-500/20 text-amber-500' : 'bg-slate-500/20 text-slate-300'}`}>[{h.type}급] {h.targetDay} 정보</p>
-                                                    <p className="text-sm font-bold whitespace-pre-line leading-relaxed text-slate-200">{h.text}</p>
-                                                </div>
-                                            ))
-                                        }
-                                    </div>
+                                <div className="max-w-lg mx-auto bg-slate-900 border border-slate-700 p-8 rounded-3xl mt-10" onClick={e => e.stopPropagation()}>
+                                    <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4"><h3 className="font-black text-xl flex items-center gap-2"><SafeIcon name="History"/> 힌트 열람 기록</h3><button onClick={() => setShowHistory(false)}><SafeIcon name="X" size={24}/></button></div>
+                                    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">{[...(myTeamData?.usedHints || [])].reverse().map(h => (<div key={h.id} className="bg-slate-950 p-5 rounded-2xl border border-slate-800"><p className={`text-xs mb-2 font-black px-2 py-1 rounded-md ${h.type === 'A' ? 'bg-amber-500/20 text-amber-500' : 'bg-slate-500/20 text-slate-300'}`}>[{h.type}급] {h.targetDay} 정보</p><p className="text-sm font-bold whitespace-pre-line">{h.text}</p></div>))}</div>
                                 </div>
                             </div>
                         )}
-
                         {confirmHintType && (
-                            <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[200] flex items-center justify-center p-6" onClick={() => setConfirmHintType(null)}>
-                                <div className="bg-slate-900 border-2 border-slate-700 p-8 rounded-3xl max-w-sm w-full text-center fade-in shadow-2xl" onClick={e => e.stopPropagation()}>
-                                    <SafeIcon name="AlertCircle" size={48} className={`mx-auto mb-6 ${confirmHintType === 'A' ? 'text-amber-500' : 'text-slate-400'}`} />
-                                    <h4 className="font-black text-2xl mb-2 text-white">{confirmHintType}급 힌트 사용</h4>
-                                    <p className="text-slate-400 text-sm mb-8 font-bold break-keep leading-relaxed">
-                                        {confirmHintType === 'A' ? '다음 요일의 모든 자원의 정보를 알려드릴까요?' : '다음 요일의 무작위 2개의 자원의 정보를 알려드릴까요?'}
-                                    </p>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <button onClick={() => setConfirmHintType(null)} className="bg-slate-800 py-4 rounded-xl font-bold hover:bg-slate-700 transition">아니오</button>
-                                        <button onClick={() => handleUseHint(confirmHintType)} className={`${confirmHintType === 'A' ? 'bg-amber-600 hover:bg-amber-500' : 'bg-slate-600 hover:bg-slate-500'} py-4 rounded-xl font-bold transition text-white`}>예 (사용)</button>
-                                    </div>
-                                </div>
-                            </div>
+                            <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-6"><div className="bg-slate-900 p-8 rounded-3xl max-w-sm w-full text-center shadow-2xl"><SafeIcon name="AlertCircle" size={48} className="mx-auto mb-6 text-amber-500" /><h4 className="font-black text-2xl mb-2">{confirmHintType}급 힌트 사용</h4><p className="text-slate-400 text-sm mb-8">정보를 확인하시겠습니까?</p><div className="grid grid-cols-2 gap-3"><button onClick={() => setConfirmHintType(null)} className="bg-slate-800 py-4 rounded-xl font-bold">아니오</button><button onClick={() => handleUseHint(confirmHintType)} className="bg-amber-600 py-4 rounded-xl font-bold">예</button></div></div></div>
                         )}
-
                         {selectedHint && (
-                            <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[200] flex items-center justify-center p-6" onClick={() => setSelectedHint(null)}>
-                                <div className="bg-slate-900 border-2 border-amber-500 p-8 rounded-3xl max-w-sm w-full shadow-[0_0_50px_rgba(245,158,11,0.3)] fade-in" onClick={e => e.stopPropagation()}>
-                                    <div className="flex justify-between items-center mb-6">
-                                        <h4 className="font-black text-amber-500 text-xl uppercase italic">Intelligence Report</h4>
-                                        <button onClick={() => setSelectedHint(null)} className="text-slate-500 hover:text-white"><SafeIcon name="X" size={24}/></button>
-                                    </div>
-                                    <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 text-center">
-                                        <p className="text-xs text-slate-500 mb-4 font-bold uppercase tracking-widest">{selectedHint.targetDay} 정보</p>
-                                        <p className="text-lg font-bold text-slate-100 leading-relaxed whitespace-pre-line">{selectedHint.text}</p>
-                                    </div>
-                                    <button onClick={() => setSelectedHint(null)} className="w-full mt-8 bg-amber-600 hover:bg-amber-500 py-4 rounded-xl font-bold transition text-white">확인 완료</button>
-                                </div>
-                            </div>
+                            <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-6"><div className="bg-slate-900 border-2 border-amber-500 p-8 rounded-3xl max-w-sm w-full text-center"><h4 className="font-black text-amber-500 text-xl mb-4">Intelligence Report</h4><div className="bg-slate-950 p-6 rounded-2xl border border-slate-800"><p className="text-xs text-slate-500 mb-4">{selectedHint.targetDay} 정보</p><p className="text-lg font-bold whitespace-pre-line">{selectedHint.text}</p></div><button onClick={() => setSelectedHint(null)} className="w-full mt-8 bg-amber-600 py-4 rounded-xl font-bold">확인</button></div></div>
                         )}
-
-                        {gameState.phase === 'investment' && gameState.currentDayIdx === 6 && (
-                            <div className="bg-rose-500/20 border border-rose-500 text-rose-400 font-black text-center py-4 px-6 rounded-2xl mb-6 shadow-lg shadow-rose-500/20 animate-pulse text-lg flex items-center justify-center gap-2">
-                                <SafeIcon name="AlertCircle" size={24} /> 마지막 요일입니다! 투자했던 모든 자원을 파세요! <SafeIcon name="AlertCircle" size={24} />
-                            </div>
-                        )}
-
-                        <div className={`grid grid-cols-1 lg:grid-cols-3 gap-6 fade-in w-full ${isWinner ? 'glow-gold p-4 rounded-[3rem]' : ''}`}>
+                        <div className={`grid grid-cols-1 lg:grid-cols-3 gap-6 fade-in w-full ${gameState.phase === 'result' && sorted[0]?.id === role ? 'glow-gold p-4 rounded-[3rem]' : ''}`}>
                             <div className="lg:col-span-2 space-y-6">
-                                <div className="bg-slate-900 p-6 rounded-[2rem] border border-slate-800 shadow-xl overflow-hidden relative">
+                                <div className="bg-slate-900 p-6 rounded-[2rem] border border-slate-800 shadow-xl relative overflow-hidden">
                                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
-                                    
-                                    <div className="flex justify-between items-center mb-6">
-                                        <h3 className="font-bold text-emerald-400 uppercase text-[10px] tracking-widest flex items-center gap-2">
-                                            <SafeIcon name="TrendingUp" size={14}/> {DAYS[gameState.currentDayIdx]} Market
-                                        </h3>
-                                        <button onClick={() => setShowHistory(true)} className="bg-slate-800 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-700 hover:bg-slate-700 transition-all flex items-center gap-1 shadow-md">
-                                            <SafeIcon name="History"/> 열람 기록
-                                        </button>
-                                    </div>
-
+                                    <div className="flex justify-between items-center mb-6"><h3 className="font-bold text-emerald-400 text-[10px] uppercase flex items-center gap-2"><SafeIcon name="TrendingUp" size={14}/> {DAYS[gameState.currentDayIdx]} Market</h3><button onClick={() => setShowHistory(true)} className="bg-slate-800 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-700 flex items-center gap-1"><SafeIcon name="History"/> 열람 기록</button></div>
                                     <div className="grid grid-cols-2 gap-4">
-                                        {ASSETS.map(a => (
-                                            <div key={a.id} className="bg-slate-800/40 p-4 rounded-2xl border border-slate-800/60">
-                                                <div className="flex justify-between items-start mb-4">
-                                                    <div className="flex gap-2 items-center"><span className="text-2xl">{a.icon}</span><span className="font-bold">{a.name}</span></div>
-                                                    <div className="text-[10px] text-blue-400 font-bold uppercase">보유: {myTeamData?.portfolio?.[a.id] || 0}</div>
-                                                </div>
-                                                <div className="flex justify-between items-center">
-                                                    <div className="font-mono font-black text-xl">{(currentPrices[a.id] || 0).toLocaleString()}원</div>
-                                                    <div className="flex gap-1">
-                                                        <button onClick={() => trade(a.id, 1)} className="bg-emerald-600 px-3 py-1.5 rounded-lg text-[10px] font-black">BUY</button>
-                                                        <button onClick={() => trade(a.id, -1)} className="bg-rose-600 px-3 py-1.5 rounded-lg text-[10px] font-black">SELL</button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
+                                        {ASSETS.map(a => (<div key={a.id} className="bg-slate-800/40 p-4 rounded-2xl border border-slate-800/60"><div className="flex justify-between items-start mb-4"><div className="flex gap-2 items-center"><span className="text-2xl">{a.icon}</span><span className="font-bold">{a.name}</span></div><div className="text-[10px] text-blue-400 font-bold uppercase">보유: {myTeamData?.portfolio?.[a.id] || 0}</div></div><div className="flex justify-between items-center"><div className="font-mono font-black text-xl">{(currentPrices[a.id] || 0).toLocaleString()}원</div><div className="flex gap-1"><button onClick={() => trade(a.id, 1)} className="bg-emerald-600 px-3 py-1.5 rounded-lg text-[10px] font-black">BUY</button><button onClick={() => trade(a.id, -1)} className="bg-rose-600 px-3 py-1.5 rounded-lg text-[10px] font-black">SELL</button></div></div></div>))}
                                     </div>
                                 </div>
-
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div className={`hint-card hint-card-a p-6 rounded-2xl shadow-xl flex flex-col items-center text-center text-white ${aHints.length === 0 ? 'opacity-50 grayscale cursor-not-allowed' : ''}`} 
-                                         onClick={() => aHints.length > 0 && setConfirmHintType('A')}>
-                                        <div className="bg-white/20 p-3 rounded-xl mb-3"><SafeIcon name="Trophy" size={24}/></div>
-                                        <h4 className="font-black text-sm uppercase mb-1">A급 힌트</h4>
-                                        <p className="text-[10px] opacity-80">{aHints.length}개 보유 중</p>
-                                    </div>
-                                    <div className={`hint-card hint-card-b p-6 rounded-2xl shadow-xl flex flex-col items-center text-center text-white ${bHints.length === 0 ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
-                                         onClick={() => bHints.length > 0 && setConfirmHintType('B')}>
-                                        <div className="bg-white/20 p-3 rounded-xl mb-3"><SafeIcon name="FileText" size={24}/></div>
-                                        <h4 className="font-black text-sm uppercase mb-1">B급 힌트</h4>
-                                        <p className="text-[10px] opacity-80">{bHints.length}개 보유 중</p>
-                                    </div>
+                                    <div className={`hint-card hint-card-a p-6 rounded-2xl flex flex-col items-center text-center text-white ${(myTeamData?.hints?.filter(h => h.type === 'A') || []).length === 0 ? 'opacity-50' : ''}`} onClick={() => (myTeamData?.hints?.filter(h => h.type === 'A') || []).length > 0 && setConfirmHintType('A')}><SafeIcon name="Trophy" size={24} className="mb-3"/><h4 className="font-black text-sm uppercase mb-1">A급 힌트</h4><p className="text-[10px]">{(myTeamData?.hints?.filter(h => h.type === 'A') || []).length}개 보유</p></div>
+                                    <div className={`hint-card hint-card-b p-6 rounded-2xl flex flex-col items-center text-center text-white ${(myTeamData?.hints?.filter(h => h.type === 'B') || []).length === 0 ? 'opacity-50' : ''}`} onClick={() => (myTeamData?.hints?.filter(h => h.type === 'B') || []).length > 0 && setConfirmHintType('B')}><SafeIcon name="FileText" size={24} className="mb-3"/><h4 className="font-black text-sm uppercase mb-1">B급 힌트</h4><p className="text-[10px]">{(myTeamData?.hints?.filter(h => h.type === 'B') || []).length}개 보유</p></div>
                                 </div>
                             </div>
-
-                            <div className="space-y-6">
-                                <div className="bg-slate-900 p-8 rounded-[2rem] border border-slate-800 shadow-2xl">
-                                    <p className="text-[10px] text-slate-500 uppercase font-black mb-2">Total Assets</p>
-                                    <p className="text-3xl font-mono font-black text-blue-400 mb-8">{worth.toLocaleString()}원</p>
-                                    <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800">
-                                        <p className="text-[10px] text-slate-500 uppercase font-black mb-1">Cash</p>
-                                        <p className="text-2xl font-mono font-black text-emerald-400">{(myTeamData?.budget || 0).toLocaleString()}원</p>
-                                    </div>
-                                    {isWinner && <div className="mt-6 p-4 bg-yellow-500/20 border border-yellow-500/30 rounded-2xl text-center text-yellow-500 font-black animate-bounce">🎉 최종 우승! 축하합니다! 🎉</div>}
-                                </div>
-                                {gameState.phase === 'result' && !isWinner && (
-                                    <div className="bg-slate-900/50 p-6 rounded-2xl border border-slate-800 text-center">
-                                        <p className="text-slate-500 font-bold uppercase text-xs">최종 순위: {sorted.findIndex(t => t.id === role) + 1}위</p>
-                                    </div>
-                                )}
-                            </div>
+                            <div className="space-y-6"><div className="bg-slate-900 p-8 rounded-[2rem] border border-slate-800 shadow-2xl"><p className="text-[10px] text-slate-500 uppercase font-black mb-2">Total Assets</p><p className="text-3xl font-mono font-black text-blue-400 mb-8">{worth.toLocaleString()}원</p><div className="bg-slate-950 p-6 rounded-2xl border border-slate-800"><p className="text-[10px] text-slate-500 uppercase font-black mb-1">Cash</p><p className="text-2xl font-mono font-black text-emerald-400">{(myTeamData?.budget || 0).toLocaleString()}원</p></div></div></div>
                         </div>
                     </div>
                 );
@@ -800,33 +520,9 @@
                 return (
                     <div className="max-w-2xl mx-auto space-y-6 fade-in w-full">
                         <div className="bg-slate-900 p-8 rounded-[2.5rem] border-2 border-blue-600 shadow-2xl">
-                            <div className="flex justify-between mb-8 items-start">
-                                <div>
-                                    <span className="bg-blue-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase mb-2 inline-block">ROUND {gameState.round}</span>
-                                    <h3 className="text-2xl font-black tracking-tighter">정보 해독 미션</h3>
-                                </div>
-                                <div className="text-blue-400 font-mono text-2xl animate-pulse">{formatTime(timeLeft)}</div>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                                {gameState.questions.map((q, idx) => (
-                                    <div key={idx} className={`bg-slate-950 p-6 rounded-3xl border-2 ${idx===0?'border-emerald-500/50':idx===1?'border-yellow-500/50':'border-rose-500/50'}`}>
-                                        <div className="text-[10px] font-black opacity-40 uppercase mb-2">Q{idx+1}</div>
-                                        <div className="math-font text-sm font-bold space-y-1">{q.eqs.map((e, i) => <div key={i}>{e}</div>)}</div>
-                                    </div>
-                                ))}
-                            </div>
-                            {!solved ? (
-                                <div className="space-y-6">
-                                    <div className="grid grid-cols-3 gap-4">
-                                        {[0,1,2].map(i => (
-                                            <div key={i} className="flex gap-1">
-                                                <input type="number" placeholder="X" value={input[i]} onChange={e=> {let n=[...input]; n[i]=e.target.value; setInput(n)}} className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-center text-xl font-bold" />
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <button onClick={() => submitPassword(input)} className="w-full bg-blue-600 py-4 rounded-2xl font-bold">해독 정보 전송</button>
-                                </div>
-                            ) : <div className="p-10 bg-blue-600/10 border border-blue-500/30 rounded-3xl text-center text-blue-400 font-black">해독 완료. 다른 팀을 기다리는 중...</div>}
+                            <div className="flex justify-between mb-8 items-start"><div><span className="bg-blue-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase mb-2 inline-block">ROUND {gameState.round}</span><h3 className="text-2xl font-black">정보 해독 미션</h3></div><div className="text-blue-400 font-mono text-2xl animate-pulse">{formatTime(timeLeft)}</div></div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">{gameState.questions.map((q, idx) => (<div key={idx} className={`bg-slate-950 p-6 rounded-3xl border-2 ${idx===0?'border-emerald-500/50':idx===1?'border-yellow-500/50':'border-rose-500/50'}`}><div className="text-[10px] font-black opacity-40 uppercase mb-2">Q{idx+1}</div><div className="math-font text-sm font-bold">{q.eqs[0]}</div></div>))}</div>
+                            {!solved ? (<div className="space-y-6"><div className="grid grid-cols-3 gap-4">{[0,1,2].map(i => (<div key={i}><input type="number" placeholder="X" value={input[i]} onChange={e=> {let n=[...input]; n[i]=e.target.value; setInput(n)}} className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-center text-xl font-bold" /></div>))}</div><button onClick={() => submitPassword(input)} className="w-full bg-blue-600 py-4 rounded-2xl font-bold">해독 정보 전송</button></div>) : <div className="p-10 bg-blue-600/10 rounded-3xl text-center text-blue-400 font-black">해독 완료. 대기 중...</div>}
                         </div>
                     </div>
                 );
@@ -834,24 +530,8 @@
 
             if (gameState.phase === 'round_result') {
                 const correct = myTeamData?.lastRoundCorrect;
-                const ready = gameState.readyTeams?.includes(role);
                 return (
-                    <div className="max-w-md mx-auto fade-in w-full">
-                        <div className="bg-slate-900 p-8 rounded-[2.5rem] border border-slate-800 text-center">
-                            <div className={`w-20 h-20 rounded-3xl mx-auto mb-6 flex items-center justify-center ${correct ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
-                                <SafeIcon name={correct ? "Unlock" : "Lock"} size={40} />
-                            </div>
-                            <h3 className="text-2xl font-black mb-6 uppercase">{correct ? "해독 성공" : "해독 실패"}</h3>
-                            <p className="bg-slate-950 p-6 rounded-2xl border border-slate-800 text-sm mb-8 font-bold">
-                                {correct ? "A급 힌트를 하나 획득하셨습니다." : "B급 힌트를 하나 획득하셨습니다."}
-                            </p>
-                            {!ready ? (
-                                <button onClick={() => fb.updateDoc(fb.doc(fb.getFirestore(), 'investment_game', 'state', 'public', gameDocId), { readyTeams: fb.arrayUnion(role) })} className="w-full bg-blue-600 py-4 rounded-2xl font-bold">
-                                    {gameState.round === 5 ? "투자 경연대회 참가" : "다음 단계 준비"}
-                                </button>
-                            ) : <div className="text-emerald-500 font-black animate-pulse">대기 중...</div>}
-                        </div>
-                    </div>
+                    <div className="max-w-md mx-auto fade-in w-full"><div className="bg-slate-900 p-8 rounded-[2.5rem] border border-slate-800 text-center"><div className={`w-20 h-20 rounded-3xl mx-auto mb-6 flex items-center justify-center ${correct ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}><SafeIcon name={correct ? "Unlock" : "Lock"} size={40} /></div><h3 className="text-2xl font-black mb-6">{correct ? "해독 성공" : "해독 실패"}</h3><p className="bg-slate-950 p-6 rounded-2xl text-sm mb-8">{correct ? "A급 힌트를 획득했습니다." : "B급 힌트를 획득했습니다."}</p>{!gameState.readyTeams?.includes(role) ? (<button onClick={() => fb.updateDoc(fb.doc(fb.getFirestore(), 'investment_game', 'state', 'public', gameDocId), { readyTeams: fb.arrayUnion(role) })} className="w-full bg-blue-600 py-4 rounded-2xl font-bold">준비 완료</button>) : <div className="text-emerald-500 font-black animate-pulse">대기 중...</div>}</div></div>
                 );
             }
             return null;
@@ -860,10 +540,7 @@
         const container = document.getElementById('root');
         const root = ReactDOM.createRoot(container);
         root.render(<App />);
-    } catch (error) {
-        console.error("시스템 실행 오류:", error);
-        document.getElementById('root').innerHTML = `<div style="color:#ef4444; padding: 20px; text-align:center;">치명적인 오류가 발생했습니다.<br/><br/>${error.message}</div>`;
-    }
+    } catch (error) { document.getElementById('root').innerHTML = `<div style="color:#ef4444; padding: 20px; text-align:center;">${error.message}</div>`; }
     </script>
 </body>
 </html>
