@@ -106,24 +106,29 @@
                 const c = a * x + b;
                 return { eqs: [`${a}x + ${b} = ${c}`], answer: [x] };
             } else {
-                const type = Math.floor(Math.random() * 3);
+                // 빨강: 괄호+소수, 괄호+분수 2가지 타입
+                const type = Math.floor(Math.random() * 2);
                 if (type === 0) { 
-                    const a = Math.floor(Math.random() * 8) + 2;
+                    // 소수와 괄호가 섞여 있는 문제
+                    const aVals = [0.2, 0.4, 0.5, 0.8, 1.2, 1.5];
+                    const a = aVals[Math.floor(Math.random() * aVals.length)];
                     const b = Math.floor(Math.random() * 9) + 1;
-                    const c = a * (x + b);
+                    const c = Number((a * (x + b)).toFixed(2));
                     return { eqs: [`${a}(x + ${b}) = ${c}`], answer: [x] };
-                } else if (type === 1) { 
-                    const bVal = [2, 4, 5][Math.floor(Math.random() * 3)];
-                    const targetX = (Math.floor(Math.random() * Math.floor(9 / bVal)) + 1) * bVal;
-                    const aVal = Math.floor(Math.random() * 3) + 1;
-                    const cVal = Math.floor(Math.random() * 5) + 1;
-                    const dVal = (aVal * targetX) / bVal + cVal;
-                    return { eqs: [`${aVal}/${bVal}x + ${cVal} = ${dVal}`], answer: [targetX] };
                 } else { 
-                    const aVal = (Math.floor(Math.random() * 9) + 1) / 10;
-                    const bVal = (Math.floor(Math.random() * 20) + 1) / 10;
-                    const cVal = Number((aVal * x + bVal).toFixed(1));
-                    return { eqs: [`${aVal}x + ${bVal} = ${cVal}`], answer: [x] };
+                    // 분수와 괄호가 섞여 있는 문제
+                    let targetX = Math.floor(Math.random() * 9) + 1;
+                    let bVal = [2, 3, 4, 5][Math.floor(Math.random() * 4)];
+                    let possibleC = [];
+                    for(let i=1; i<=9; i++) {
+                        if((targetX + i) % bVal === 0) possibleC.push(i);
+                    }
+                    if (possibleC.length === 0) { targetX = bVal; possibleC = [bVal]; }
+                    const cVal = possibleC[Math.floor(Math.random() * possibleC.length)];
+                    let aVal = Math.floor(Math.random() * 3) + 1;
+                    if (aVal === bVal) aVal = 1;
+                    const dVal = (aVal * (targetX + cVal)) / bVal;
+                    return { eqs: [`${aVal}/${bVal}(x + ${cVal}) = ${dVal}`], answer: [targetX] };
                 }
             }
         };
@@ -342,16 +347,33 @@
                             <div className="max-w-xl mx-auto bg-slate-900 border border-slate-700 p-8 rounded-3xl mt-10 shadow-2xl fade-in" onClick={e => e.stopPropagation()}>
                                 <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4"><h3 className="font-black text-2xl flex items-center gap-2 text-emerald-400"><SafeIcon name="Info"/> 게임 규칙 안내</h3><button onClick={() => setShowRules(false)} className="text-slate-500 hover:text-rose-500"><SafeIcon name="X" size={24}/></button></div>
                                 <div className="space-y-6 text-slate-300 text-sm leading-relaxed">
-                                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800"><h4 className="font-bold text-lg text-blue-400 mb-2">1페이즈: 정보 해독 미션</h4>
-                                        <ul className="list-disc pl-5 space-y-1">
-                                            <li>각 조는 제한시간 내에 3개의 일차방정식을 풀어야 합니다.</li>
-                                            <li>정답을 맞히면 <span className="text-amber-500 font-bold">A급 힌트</span>, 오답 시 <span className="text-slate-400 font-bold">B급 힌트</span>를 획득합니다.</li>
+                                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800">
+                                        <h4 className="font-bold text-lg text-blue-400 mb-2">1페이즈: 정보 해독 미션</h4>
+                                        <ul className="list-disc pl-5 space-y-2">
+                                            <li>각 조는 제한시간 내에 3개의 일차방정식(초록, 노랑, 빨강 난이도)을 풀어야 합니다.</li>
+                                            <li>제한시간은 1라운드 100초부터 시작하여 매 라운드 10초씩 단축됩니다.</li>
+                                            <li>제한시간 내에 모든 문제의 정답을 맞히면 최고급 정보인 <span className="text-amber-500 font-bold">A급 힌트</span>를 획득합니다.</li>
+                                            <li>시간이 초과되거나 오답을 제출할 경우 <span className="text-slate-400 font-bold">B급 힌트</span>를 획득합니다.</li>
+                                            <li>문제를 다 푼 후 관리자의 지시에 따라 다음 라운드를 진행하거나 투자 경연으로 넘어갑니다.</li>
                                         </ul>
                                     </div>
-                                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800"><h4 className="font-bold text-lg text-emerald-400 mb-2">2페이즈: 투자 경연</h4>
-                                        <ul className="list-disc pl-5 space-y-1">
-                                            <li>7일 동안 매일 1분씩 진행되며 자원 가격이 변동됩니다.</li>
-                                            <li>일요일이 끝나기 전에 모든 자원을 현금화해야 합니다!</li>
+                                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800">
+                                        <h4 className="font-bold text-lg text-emerald-400 mb-2">2페이즈: 실전 투자 경연</h4>
+                                        <ul className="list-disc pl-5 space-y-2">
+                                            <li>투자는 가상의 '월요일'부터 '일요일'까지 7일 동안, 매일 <span className="font-bold text-white">1분씩</span> 실시간으로 진행됩니다.</li>
+                                            <li>4가지 자원(밀가루, 석유, 목재, 콜라)의 가격은 매일 무작위로 상승하거나 하락합니다.</li>
+                                            <li>주어진 기본 자본금(100,000원)을 활용해 시장 상황에 맞춰 자원을 사고팔아 자산을 불려보세요.</li>
+                                            <li><span className="text-rose-400 font-bold">주의:</span> 일요일 장이 마감되기 전에 보유한 모든 자원을 반드시 현금화(SELL)해야 합니다!</li>
+                                            <li>최종적으로 가장 많은 현금을 보유한 조가 우승합니다.</li>
+                                        </ul>
+                                    </div>
+                                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800">
+                                        <h4 className="font-bold text-lg text-amber-500 mb-2">힌트 카드 사용법 (핵심 전략)</h4>
+                                        <ul className="list-disc pl-5 space-y-2">
+                                            <li>해독 미션에서 획득한 힌트는 2페이즈 투자 경연 중에 언제든 사용할 수 있는 <span className="font-bold text-rose-400">소모성 아이템</span>입니다.</li>
+                                            <li><span className="text-amber-500 font-bold">A급 힌트</span>: 다음 요일의 '모든 자원(4개)' 변동 가격을 정확히 알려줍니다.</li>
+                                            <li><span className="text-slate-400 font-bold">B급 힌트</span>: 다음 요일의 '무작위 2개 자원' 변동 가격만 알려줍니다.</li>
+                                            <li>한 번 사용한 힌트는 우측 상단의 '열람 기록' 버튼을 눌러 다시 확인할 수 있습니다.</li>
                                         </ul>
                                     </div>
                                 </div>
