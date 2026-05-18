@@ -442,13 +442,30 @@
                                         </div>
                                         <button onClick={resetGame} className="mt-4 text-[10px] text-rose-500 font-black uppercase tracking-widest w-full text-right hover:text-rose-400 transition-colors">시스템 초기화</button>
                                     </section>
+                                    
+                                    {gameState?.phase === 'password' && (
+                                        <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800">
+                                            <h3 className="text-xs font-bold text-emerald-400 mb-4 uppercase flex items-center gap-2">
+                                                <SafeIcon name="Check" size={16}/> {gameState.round}라운드 비밀번호 제출 현황
+                                            </h3>
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                                                {allTeams.map(t => {
+                                                    const isSolved = t.solvedRounds?.includes(gameState.round);
+                                                    return (
+                                                        <div key={t.id} className={`p-4 rounded-2xl border flex flex-col items-center text-center gap-2 transition-all shadow-md ${isSolved ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : 'bg-rose-500/20 border-rose-500/50 text-rose-400'}`}>
+                                                            <SafeIcon name={isSolved ? "Unlock" : "Lock"} size={24}/>
+                                                            <span className="text-sm font-black">{t.teamName}</span>
+                                                            <span className="text-[10px] font-bold">{isSolved ? "제출 완료" : "미제출"}</span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800"><h3 className="text-xs font-bold text-yellow-500 mb-4 uppercase">실시간 순위</h3>
-                                            {[...allTeams].sort((a,b) => {
-                                                const valA = (a.budget || 0) + ASSETS.reduce((acc, ast) => acc + (a.portfolio?.[ast.id] || 0) * (gameState?.currentPrices?.[ast.id] || 10000), 0);
-                                                const valB = (b.budget || 0) + ASSETS.reduce((acc, ast) => acc + (b.portfolio?.[ast.id] || 0) * (gameState?.currentPrices?.[ast.id] || 10000), 0);
-                                                return valB - valA;
-                                            }).map((t, i) => (<div key={t.id} className="flex justify-between p-3 bg-slate-800/40 rounded-xl mb-2 border border-slate-800 text-sm"><span>{i+1}. {t.teamName}</span><span className="text-emerald-400 font-mono">{((t.budget || 0) + ASSETS.reduce((acc, ast) => acc + (t.portfolio?.[ast.id] || 0) * (gameState?.currentPrices?.[ast.id] || 10000), 0)).toLocaleString()}원</span></div>))}
+                                        <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800"><h3 className="text-xs font-bold text-yellow-500 mb-4 uppercase">실시간 순위 (보유 현금)</h3>
+                                            {[...allTeams].sort((a,b) => (b.budget || 0) - (a.budget || 0)).map((t, i) => (<div key={t.id} className="flex justify-between p-3 bg-slate-800/40 rounded-xl mb-2 border border-slate-800 text-sm"><span>{i+1}. {t.teamName}</span><span className="text-emerald-400 font-mono">{(t.budget || 0).toLocaleString()}원</span></div>))}
                                         </div>
                                         <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800"><h3 className="text-xs font-bold text-blue-400 mb-4 uppercase">시장 가격</h3>
                                             <div className="grid grid-cols-2 gap-2">
