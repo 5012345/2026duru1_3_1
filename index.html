@@ -32,7 +32,7 @@
 </head>
 <body class="antialiased overflow-x-hidden">
     <div id="root">
-        <div class="fallback-loader animate-pulse">
+        <div class="fallback-loader">
             시스템 초기화 중입니다... (화면이 멈춰있다면 새로고침을 눌러주세요)
         </div>
     </div>
@@ -106,17 +106,14 @@
                 const c = a * x + b;
                 return { eqs: [`${a}x + ${b} = ${c}`], answer: [x] };
             } else {
-                // 빨강: 괄호+소수, 괄호+분수 2가지 타입
                 const type = Math.floor(Math.random() * 2);
                 if (type === 0) { 
-                    // 소수와 괄호가 섞여 있는 문제
                     const aVals = [0.2, 0.4, 0.5, 0.8, 1.2, 1.5];
                     const a = aVals[Math.floor(Math.random() * aVals.length)];
                     const b = Math.floor(Math.random() * 9) + 1;
                     const c = Number((a * (x + b)).toFixed(2));
                     return { eqs: [`${a}(x + ${b}) = ${c}`], answer: [x] };
                 } else { 
-                    // 분수와 괄호가 섞여 있는 문제
                     let targetX = Math.floor(Math.random() * 9) + 1;
                     let bVal = [2, 3, 4, 5][Math.floor(Math.random() * 4)];
                     let possibleC = [];
@@ -223,6 +220,7 @@
                 }
             }, [allTeams, gameState, fb, role]);
 
+            // 타이머 주기 500ms -> 1000ms 로 변경 (최적화)
             useEffect(() => {
                 const tick = setInterval(() => {
                     if (gameState?.timerStart) {
@@ -244,7 +242,7 @@
                             }
                         }
                     }
-                }, 500);
+                }, 1000);
                 return () => clearInterval(tick);
             }, [gameState, role, fb]);
 
@@ -330,7 +328,8 @@
                 </div>
             );
 
-            if (loading) return <div className="h-screen flex items-center justify-center font-bold text-slate-500 animate-pulse">데이터베이스 연동 중...</div>;
+            // 애니메이션 제거
+            if (loading) return <div className="h-screen flex items-center justify-center font-bold text-slate-500">데이터베이스 연동 중...</div>;
 
             if (!role) return (
                 <div className="h-screen flex items-center justify-center p-4 relative">
@@ -342,8 +341,9 @@
                             {[1,2,3,4,5,6,7,8,9,10].map(n => <button key={n} onClick={() => joinTeam(n)} className="bg-slate-800 py-3 rounded-xl border border-slate-700 font-bold hover:bg-blue-600 transition-all">{n}조 참가</button>)}
                         </div>
                     </div>
+                    {/* 블러 제거, 배경 진하게 변경 */}
                     {showRules && (
-                        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[200] p-6 overflow-y-auto" onClick={() => setShowRules(false)}>
+                        <div className="fixed inset-0 bg-black/95 z-[200] p-6 overflow-y-auto" onClick={() => setShowRules(false)}>
                             <div className="max-w-xl mx-auto bg-slate-900 border border-slate-700 p-8 rounded-3xl mt-10 shadow-2xl fade-in" onClick={e => e.stopPropagation()}>
                                 <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4"><h3 className="font-black text-2xl flex items-center gap-2 text-emerald-400"><SafeIcon name="Info"/> 게임 규칙 안내</h3><button onClick={() => setShowRules(false)} className="text-slate-500 hover:text-rose-500"><SafeIcon name="X" size={24}/></button></div>
                                 <div className="space-y-6 text-slate-300 text-sm leading-relaxed">
@@ -381,8 +381,9 @@
                             </div>
                         </div>
                     )}
+                    {/* 블러 제거, 배경 진하게 변경 */}
                     {showAdminLogin && (
-                        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[100] flex items-center justify-center">
+                        <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center">
                             <div className="bg-slate-900 p-8 rounded-3xl w-80 shadow-2xl border border-slate-800">
                                 <input type="password" placeholder="비밀번호" value={adminPwInput} onChange={e => setAdminPwInput(e.target.value)} className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl mb-4 text-center text-xl font-bold" />
                                 <div className="flex gap-2"><button onClick={() => setShowAdminLogin(false)} className="flex-1 bg-slate-800 py-4 rounded-xl font-bold text-slate-400">취소</button><button onClick={() => { if(adminPwInput===ADMIN_PASSWORD) setRole('admin'); setShowAdminLogin(false); }} className="flex-1 bg-blue-600 py-4 rounded-xl font-bold">확인</button></div>
@@ -394,13 +395,15 @@
 
             return (
                 <div className="min-h-screen flex flex-col">
-                    <header className="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 p-4 sticky top-0 z-50 flex justify-between items-center">
+                    {/* 헤더 배경 블러 및 투명도 제거 */}
+                    <header className="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-50 flex justify-between items-center">
                         <div className="flex items-center gap-3"><div className="bg-blue-600 p-2 rounded-xl"><SafeIcon name="Coins" size={20}/></div><div><h2 className="font-bold text-sm">일차방정식 투자 경연대회</h2><p className="text-[10px] text-blue-500 font-bold uppercase">{role === 'admin' ? '관리자' : myTeamData?.teamName}</p></div></div>
                         {role === 'admin' && (<button onClick={() => setIsBgmOn(!isBgmOn)} className={`flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs font-bold transition-all shadow-lg ${isBgmOn ? 'bg-amber-500/20 border-amber-500 text-amber-500' : 'bg-slate-800 border-slate-700 text-slate-500'}`}><SafeIcon name={isBgmOn ? "Volume2" : "VolumeX"} size={16}/> {isBgmOn ? "BGM 켜짐" : "BGM 꺼짐"}</button>)}
                         {gameState?.timerStart && (
                             <div className="bg-slate-950 px-4 py-2 rounded-2xl font-mono text-xl border border-slate-800 text-blue-400 flex items-center gap-2">
                                 <span className="text-xs text-slate-500 font-sans mr-1">{gameState.phase === 'investment' ? DAYS[gameState.currentDayIdx] : ''}</span>
-                                <SafeIcon name="Timer" size={18} className="animate-pulse" /> 
+                                {/* 애니메이션 제거 */}
+                                <SafeIcon name="Timer" size={18} /> 
                                 {(() => {
                                     if (gameState.phase === 'investment') {
                                         const elapsedSec = (gameState.timerDuration || 420) - timeLeft;
@@ -417,7 +420,8 @@
                         {role === 'admin' ? (
                             gameState?.phase === 'result' ? (
                                 <div className="w-full flex flex-col items-center justify-center space-y-8 py-10 fade-in">
-                                    <div className="text-center mb-4"><h2 className="text-5xl font-black text-amber-400 mb-4 animate-bounce">🎉 투자 경연대회 최종 결과 🎉</h2></div>
+                                    {/* 바운스 애니메이션 제거 */}
+                                    <div className="text-center mb-4"><h2 className="text-5xl font-black text-amber-400 mb-4">🎉 투자 경연대회 최종 결과 🎉</h2></div>
                                     <div className="w-full max-w-4xl space-y-4">
                                         {[...allTeams].sort((a,b) => {
                                             const getWorth = (t) => (t.budget || 0) + ASSETS.reduce((acc, ast) => acc + (t.portfolio?.[ast.id] || 0) * (gameState?.currentPrices?.[ast.id] || 10000), 0);
@@ -521,7 +525,8 @@
                 setConfirmHintType(null); setSelectedHint(newUsedHint); 
             };
 
-            if (!gameState || gameState.phase === 'lobby') return (<div className="h-full py-20 flex flex-col items-center gap-6 text-center w-full"><div className="bg-blue-600/10 p-8 rounded-full animate-pulse border border-blue-500/20"><SafeIcon name="RefreshCw" size={64} className="text-blue-500" /></div><h2 className="text-2xl font-black">참가 완료.</h2><p className="text-slate-500 text-sm">관리자의 시작 신호를 기다리세요.</p></div>);
+            // 애니메이션 제거
+            if (!gameState || gameState.phase === 'lobby') return (<div className="h-full py-20 flex flex-col items-center gap-6 text-center w-full"><div className="bg-blue-600/10 p-8 rounded-full border border-blue-500/20"><SafeIcon name="RefreshCw" size={64} className="text-blue-500" /></div><h2 className="text-2xl font-black">참가 완료.</h2><p className="text-slate-500 text-sm">관리자의 시작 신호를 기다리세요.</p></div>);
 
             if (gameState.phase === 'investment' || gameState.phase === 'result') {
                 const currentPrices = gameState.currentPrices || { flour: 10000, oil: 10000, wood: 10000, coke: 10000 };
@@ -533,8 +538,9 @@
                 return (
                     <div className="relative w-full">
                         <div className={`blackout-overlay ${isBlackout ? 'active' : ''}`}><h1 className="text-4xl font-black text-white">{DAYS[gameState.currentDayIdx]}이 되었습니다</h1></div>
+                        {/* 블러 제거 */}
                         {showHistory && (
-                            <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[200] p-6 overflow-y-auto" onClick={() => setShowHistory(false)}>
+                            <div className="fixed inset-0 bg-black/95 z-[200] p-6 overflow-y-auto" onClick={() => setShowHistory(false)}>
                                 <div className="max-w-lg mx-auto bg-slate-900 border border-slate-700 p-8 rounded-3xl mt-10" onClick={e => e.stopPropagation()}>
                                     <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4"><h3 className="font-black text-xl flex items-center gap-2"><SafeIcon name="History"/> 힌트 열람 기록</h3><button onClick={() => setShowHistory(false)}><SafeIcon name="X" size={24}/></button></div>
                                     <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">{[...(myTeamData?.usedHints || [])].reverse().map(h => (<div key={h.id} className="bg-slate-950 p-5 rounded-2xl border border-slate-800"><p className={`text-xs mb-2 font-black px-2 py-1 rounded-md ${h.type === 'A' ? 'bg-amber-500/20 text-amber-500' : 'bg-slate-500/20 text-slate-300'}`}>[{h.type}급] {h.targetDay} 정보</p><p className="text-sm font-bold whitespace-pre-line">{h.text}</p></div>))}</div>
@@ -542,10 +548,10 @@
                             </div>
                         )}
                         {confirmHintType && (
-                            <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-6"><div className="bg-slate-900 p-8 rounded-3xl max-w-sm w-full text-center shadow-2xl"><SafeIcon name="AlertCircle" size={48} className="mx-auto mb-6 text-amber-500" /><h4 className="font-black text-2xl mb-2">{confirmHintType}급 힌트 사용</h4><p className="text-slate-400 text-sm mb-8">정보를 확인하시겠습니까?</p><div className="grid grid-cols-2 gap-3"><button onClick={() => setConfirmHintType(null)} className="bg-slate-800 py-4 rounded-xl font-bold">아니오</button><button onClick={() => handleUseHint(confirmHintType)} className="bg-amber-600 py-4 rounded-xl font-bold">예</button></div></div></div>
+                            <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-6"><div className="bg-slate-900 p-8 rounded-3xl max-w-sm w-full text-center shadow-2xl"><SafeIcon name="AlertCircle" size={48} className="mx-auto mb-6 text-amber-500" /><h4 className="font-black text-2xl mb-2">{confirmHintType}급 힌트 사용</h4><p className="text-slate-400 text-sm mb-8">정보를 확인하시겠습니까?</p><div className="grid grid-cols-2 gap-3"><button onClick={() => setConfirmHintType(null)} className="bg-slate-800 py-4 rounded-xl font-bold">아니오</button><button onClick={() => handleUseHint(confirmHintType)} className="bg-amber-600 py-4 rounded-xl font-bold">예</button></div></div></div>
                         )}
                         {selectedHint && (
-                            <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-6"><div className="bg-slate-900 border-2 border-amber-500 p-8 rounded-3xl max-w-sm w-full text-center"><h4 className="font-black text-amber-500 text-xl mb-4">Intelligence Report</h4><div className="bg-slate-950 p-6 rounded-2xl border border-slate-800"><p className="text-xs text-slate-500 mb-4">{selectedHint.targetDay} 정보</p><p className="text-lg font-bold whitespace-pre-line">{selectedHint.text}</p></div><button onClick={() => setSelectedHint(null)} className="w-full mt-8 bg-amber-600 py-4 rounded-xl font-bold">확인</button></div></div>
+                            <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-6"><div className="bg-slate-900 border-2 border-amber-500 p-8 rounded-3xl max-w-sm w-full text-center"><h4 className="font-black text-amber-500 text-xl mb-4">Intelligence Report</h4><div className="bg-slate-950 p-6 rounded-2xl border border-slate-800"><p className="text-xs text-slate-500 mb-4">{selectedHint.targetDay} 정보</p><p className="text-lg font-bold whitespace-pre-line">{selectedHint.text}</p></div><button onClick={() => setSelectedHint(null)} className="w-full mt-8 bg-amber-600 py-4 rounded-xl font-bold">확인</button></div></div>
                         )}
                         <div className={`grid grid-cols-1 lg:grid-cols-3 gap-6 fade-in w-full ${gameState.phase === 'result' && sorted[0]?.id === role ? 'glow-gold p-4 rounded-[3rem]' : ''}`}>
                             <div className="lg:col-span-2 space-y-6">
@@ -572,7 +578,8 @@
                 return (
                     <div className="max-w-2xl mx-auto space-y-6 fade-in w-full">
                         <div className="bg-slate-900 p-8 rounded-[2.5rem] border-2 border-blue-600 shadow-2xl">
-                            <div className="flex justify-between mb-8 items-start"><div><span className="bg-blue-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase mb-2 inline-block">ROUND {gameState.round}</span><h3 className="text-2xl font-black">정보 해독 미션</h3></div><div className="text-blue-400 font-mono text-2xl animate-pulse">{formatTime(timeLeft)}</div></div>
+                            {/* 애니메이션 제거 */}
+                            <div className="flex justify-between mb-8 items-start"><div><span className="bg-blue-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase mb-2 inline-block">ROUND {gameState.round}</span><h3 className="text-2xl font-black">정보 해독 미션</h3></div><div className="text-blue-400 font-mono text-2xl">{formatTime(timeLeft)}</div></div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">{gameState.questions.map((q, idx) => (<div key={idx} className={`bg-slate-950 p-6 rounded-3xl border-2 ${idx===0?'border-emerald-500/50':idx===1?'border-yellow-500/50':'border-rose-500/50'}`}><div className="text-[10px] font-black opacity-40 uppercase mb-2">Q{idx+1}</div><div className="math-font text-sm font-bold">{q.eqs[0]}</div></div>))}</div>
                             {!solved ? (<div className="space-y-6"><div className="grid grid-cols-3 gap-4">{[0,1,2].map(i => (<div key={i}><input type="number" placeholder="X" value={input[i]} onChange={e=> {let n=[...input]; n[i]=e.target.value; setInput(n)}} className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-center text-xl font-bold" /></div>))}</div><button onClick={() => submitPassword(input)} className="w-full bg-blue-600 py-4 rounded-2xl font-bold">해독 정보 전송</button></div>) : <div className="p-10 bg-blue-600/10 rounded-3xl text-center text-blue-400 font-black">해독 완료. 대기 중...</div>}
                         </div>
@@ -583,7 +590,8 @@
             if (gameState.phase === 'round_result') {
                 const correct = myTeamData?.lastRoundCorrect;
                 return (
-                    <div className="max-w-md mx-auto fade-in w-full"><div className="bg-slate-900 p-8 rounded-[2.5rem] border border-slate-800 text-center"><div className={`w-20 h-20 rounded-3xl mx-auto mb-6 flex items-center justify-center ${correct ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}><SafeIcon name={correct ? "Unlock" : "Lock"} size={40} /></div><h3 className="text-2xl font-black mb-6">{correct ? "해독 성공" : "해독 실패"}</h3><p className="bg-slate-950 p-6 rounded-2xl text-sm mb-8">{correct ? "A급 힌트를 획득했습니다." : "B급 힌트를 획득했습니다."}</p>{!gameState.readyTeams?.includes(role) ? (<button onClick={() => fb.updateDoc(fb.doc(fb.getFirestore(), 'investment_game', 'state', 'public', gameDocId), { readyTeams: fb.arrayUnion(role) })} className="w-full bg-blue-600 py-4 rounded-2xl font-bold">준비 완료</button>) : <div className="text-emerald-500 font-black animate-pulse">대기 중...</div>}</div></div>
+                    // 애니메이션 제거
+                    <div className="max-w-md mx-auto fade-in w-full"><div className="bg-slate-900 p-8 rounded-[2.5rem] border border-slate-800 text-center"><div className={`w-20 h-20 rounded-3xl mx-auto mb-6 flex items-center justify-center ${correct ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}><SafeIcon name={correct ? "Unlock" : "Lock"} size={40} /></div><h3 className="text-2xl font-black mb-6">{correct ? "해독 성공" : "해독 실패"}</h3><p className="bg-slate-950 p-6 rounded-2xl text-sm mb-8">{correct ? "A급 힌트를 획득했습니다." : "B급 힌트를 획득했습니다."}</p>{!gameState.readyTeams?.includes(role) ? (<button onClick={() => fb.updateDoc(fb.doc(fb.getFirestore(), 'investment_game', 'state', 'public', gameDocId), { readyTeams: fb.arrayUnion(role) })} className="w-full bg-blue-600 py-4 rounded-2xl font-bold">준비 완료</button>) : <div className="text-emerald-500 font-black">대기 중...</div>}</div></div>
                 );
             }
             return null;
