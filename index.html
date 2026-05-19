@@ -84,14 +84,6 @@
             return <span className={className} style={{ fontSize: size, lineHeight: 1 }}>{emojiMap[name] || "💠"}</span>;
         };
 
-        const generateNormalPrice = () => {
-            const rand = (Math.random() + Math.random() + Math.random()) / 3; 
-            const min = 1000;
-            const max = 20000;
-            let price = Math.round((min + rand * (max - min)) / 1000) * 1000;
-            return Math.min(max, Math.max(min, price));
-        };
-
         const generateSystem = (difficulty) => {
             const x = Math.floor(Math.random() * 9) + 1;
 
@@ -143,6 +135,7 @@
             const [myTeamData, setMyTeamData] = useState(null);
             const [allTeams, setAllTeams] = useState([]);
             const [loading, setLoading] = useState(true);
+            const [timeLeft, setTimeLeft] = useState(0);
             const [showAdminLogin, setShowAdminLogin] = useState(false);
             const [showRules, setShowRules] = useState(false); 
             const [adminPwInput, setAdminPwInput] = useState("");
@@ -266,10 +259,37 @@
                 const q2 = generateSystem('yellow');
                 const q3 = generateSystem('red');
                 let history = gameState?.priceHistory || [];
+                
                 if (nextRound === 1 || !history.length) {
                     history = [{ flour: 10000, oil: 10000, wood: 10000, coke: 10000 }];
+                    const trends = { flour: 0, oil: 0, wood: 0, coke: 0 };
+                    
                     for (let i = 1; i <= 7; i++) {
-                        const next = {}; ASSETS.forEach(a => { next[a.id] = generateNormalPrice(); });
+                        const prev = history[i - 1];
+                        const next = {}; 
+                        ASSETS.forEach(a => { 
+                            // 추세 반영 (어제 올랐으면 오늘도 오를 확률 65%)
+                            let direction = trends[a.id] !== 0 ? (Math.random() < 0.65 ? trends[a.id] : -trends[a.id]) : (Math.random() < 0.5 ? 1 : -1);
+                            
+                            // 기본 변동폭: 1000 ~ 6000
+                            let jump = (Math.floor(Math.random() * 6) + 1) * 1000;
+                            
+                            // 극단적인 값 발생 확률 추가 (25% 확률로 8000폭등/폭락 추가)
+                            if (Math.random() < 0.25) jump += 8000; 
+                            
+                            let newPrice = prev[a.id] + direction * jump;
+                            
+                            // 10% 확률로 상한가/하한가(20000, 1000) 직행
+                            if (Math.random() < 0.1) newPrice = direction === 1 ? 20000 : 1000;
+                            
+                            // 가격 상하한선 방어
+                            if (newPrice > 20000) newPrice = 20000;
+                            if (newPrice < 1000) newPrice = 1000;
+                            
+                            // 다음 날짜를 위한 추세 기록
+                            trends[a.id] = newPrice > prev[a.id] ? 1 : (newPrice < prev[a.id] ? -1 : direction);
+                            next[a.id] = newPrice; 
+                        });
                         history.push(next);
                     }
                 }
@@ -407,7 +427,9 @@
                     <header className="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-50 flex justify-between items-center">
                         <div className="flex items-center gap-3"><div className="bg-blue-600 p-2 rounded-xl"><SafeIcon name="Coins" size={20}/></div><div><h2 className="font-bold text-sm">일차방정식 투자 경연대회</h2><p className="text-[10px] text-blue-500 font-bold uppercase">{role === 'admin' ? '관리자' : myTeamData?.teamName}</p></div></div>
                         {role === 'admin' && (<button onClick={() => setIsBgmOn(!isBgmOn)} className={`flex items-center gap-2 px-4 py-1.5 rounded-full border text-xs font-bold transition-all shadow-lg ${isBgmOn ? 'bg-amber-500/20 border-amber-500 text-amber-500' : 'bg-slate-800 border-slate-700 text-slate-500'}`}><SafeIcon name={isBgmOn ? "Volume2" : "VolumeX"} size={16}/> {isBgmOn ? "BGM 켜짐" : "BGM 꺼짐"}</button>)}
-                        {gameState?.timerStart && (
+                        
+                        {/* 1페이즈 참가자 화면에서는 헤더 타이머 숨김 */}
+                        {gameState?.timerStart && !(role !== 'admin' && gameState.phase === 'password') && (
                             <div className="bg-slate-950 px-4 py-2 rounded-2xl font-mono text-xl border border-slate-800 text-blue-400 flex items-center gap-2">
                                 <span className="text-xs text-slate-500 font-sans mr-1">{gameState.phase === 'investment' ? DAYS[gameState.currentDayIdx] : ''}</span>
                                 <SafeIcon name="Timer" size={18} /> 
