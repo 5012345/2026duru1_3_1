@@ -112,7 +112,7 @@
                     const a = aVals[Math.floor(Math.random() * aVals.length)];
                     const b = Math.floor(Math.random() * 9) + 1;
                     const c = Number((a * (x + b)).toFixed(2));
-                    return { eqs: [`${a}(x + ${b}) = ${c}`], answer: [x] };
+                    return { eqs: [`${a === 1 ? '' : a}(x + ${b}) = ${c}`], answer: [x] };
                 } else { 
                     let targetX = Math.floor(Math.random() * 9) + 1;
                     let bVal = [2, 3, 4, 5][Math.floor(Math.random() * 4)];
@@ -125,7 +125,7 @@
                     let aVal = Math.floor(Math.random() * 3) + 1;
                     if (aVal === bVal) aVal = 1;
                     const dVal = (aVal * (targetX + cVal)) / bVal;
-                    return { eqs: [`${aVal}/${bVal}(x + ${cVal}) = ${dVal}`], answer: [targetX] };
+                    return { eqs: [`${aVal === 1 ? '' : aVal}/${bVal}(x + ${cVal}) = ${dVal}`], answer: [targetX] };
                 }
             }
         };
@@ -279,6 +279,13 @@
                             // 추세 반영 (어제와 같은 방향일 확률 20%)
                             let direction = trends[a.id] !== 0 ? (Math.random() < 0.20 ? trends[a.id] : -trends[a.id]) : (Math.random() < 0.5 ? 1 : -1);
                             
+                            // 가격이 10000원에서 멀어질수록 다시 10000원으로 회귀할 확률을 점차 높임 (정규분포 형태 유도)
+                            const distFromCenter = prev[a.id] - 10000;
+                            const pullForce = Math.abs(distFromCenter) / 10000;
+                            if (Math.random() < pullForce * 0.8) {
+                                direction = distFromCenter > 0 ? -1 : 1;
+                            }
+
                             // 현재 가격이 상/하한선인 경우 무조건 반대 방향으로 (고정 버그 해결)
                             if (prev[a.id] >= 20000) direction = -1;
                             if (prev[a.id] <= 1000) direction = 1;
@@ -291,8 +298,8 @@
                             
                             let newPrice = prev[a.id] + direction * jump;
                             
-                            // 3% 확률로 상한가/하한가(20000, 1000) 직행 (확률 낮춤)
-                            if (Math.random() < 0.03) newPrice = direction === 1 ? 20000 : 1000;
+                            // 1% 확률로 상한가/하한가(20000, 1000) 직행 (확률 1%로 하향)
+                            if (Math.random() < 0.01) newPrice = direction === 1 ? 20000 : 1000;
                             
                             // 가격 상하한선 방어
                             if (newPrice > 20000) newPrice = 20000;
