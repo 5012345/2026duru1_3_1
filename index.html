@@ -259,7 +259,7 @@
             const startNextRound = async () => {
                 const db = fb.getFirestore();
                 const nextRound = (gameState?.round || 0) + 1;
-                const currentDuration = 110 - nextRound * 10;
+                const currentDuration = 60; // 모든 라운드 60초 통일
                 const q1 = generateSystem('green');
                 const q2 = generateSystem('yellow');
                 const q3 = generateSystem('red');
@@ -272,23 +272,38 @@
                     for (let i = 1; i <= 7; i++) {
                         const prev = history[i - 1];
                         const next = {}; 
+                        
+                        const marketEventRand = Math.random();
+                        const isCrash = marketEventRand < 0.03; // 폭락장 3%
+                        const isBoom = marketEventRand >= 0.03 && marketEventRand < 0.06; // 폭등장 3%
+                        
                         ASSETS.forEach(a => { 
-                            // 추세 및 가격생성 로직 최적화 압축
-                            let dir = trends[a.id] !== 0 ? (Math.random() < 0.20 ? trends[a.id] : -trends[a.id]) : (Math.random() < 0.5 ? 1 : -1);
-                            const pull = Math.abs(prev[a.id] - 10000) / 10000;
-                            if (Math.random() < pull * 0.8) dir = prev[a.id] > 10000 ? -1 : 1;
-                            if (prev[a.id] >= 20000) dir = -1;
-                            if (prev[a.id] <= 1000) dir = 1;
-                            
-                            let jump = (Math.floor(Math.random() * 6) + 1) * 1000;
-                            if (Math.random() < 0.25) jump += 8000; 
-                            
-                            let np = prev[a.id] + dir * jump;
-                            if (Math.random() < 0.01) np = dir === 1 ? 20000 : 1000;
-                            
-                            np = Math.min(20000, Math.max(1000, np));
-                            trends[a.id] = np > prev[a.id] ? 1 : (np < prev[a.id] ? -1 : dir);
-                            next[a.id] = np; 
+                            if (isCrash) {
+                                next[a.id] = Math.floor(Math.random() * 5 + 1) * 1000; // 1000 ~ 5000
+                                trends[a.id] = -1;
+                            } else if (isBoom) {
+                                next[a.id] = Math.floor(Math.random() * 6 + 15) * 1000; // 15000 ~ 20000
+                                trends[a.id] = 1;
+                            } else {
+                                // 추세 및 가격생성 로직
+                                let dir = trends[a.id] !== 0 ? (Math.random() < 0.20 ? trends[a.id] : -trends[a.id]) : (Math.random() < 0.5 ? 1 : -1);
+                                
+                                // 중앙값 회귀: 거리가 멀수록 회귀 확률 대폭 강화
+                                const pull = Math.abs(prev[a.id] - 10000) / 10000;
+                                if (Math.random() < Math.pow(pull, 0.8)) dir = prev[a.id] > 10000 ? -1 : 1;
+                                if (prev[a.id] >= 20000) dir = -1;
+                                if (prev[a.id] <= 1000) dir = 1;
+                                
+                                // 변동폭 완화: 1000 ~ 4000
+                                let jump = (Math.floor(Math.random() * 2) + Math.floor(Math.random() * 3) + 1) * 1000;
+                                
+                                let np = prev[a.id] + dir * jump;
+                                if (Math.random() < 0.01) np = dir === 1 ? 20000 : 1000;
+                                
+                                np = Math.min(20000, Math.max(1000, np));
+                                trends[a.id] = np > prev[a.id] ? 1 : (np < prev[a.id] ? -1 : dir);
+                                next[a.id] = np; 
+                            }
                         });
                         history.push(next);
                     }
@@ -322,15 +337,33 @@
             const joinTeam = async (n) => {
                 const id = `team_${n}`;
                 const db = fb.getFirestore();
+                const auth = fb.getAuth();
+                const user = auth.currentUser;
+
+                if (!user) {
+                    alert("서버 연결 중입니다. 잠시 후 다시 시도해주세요.");
+                    return;
+                }
+
                 const ref = fb.doc(db, 'investment_game', 'teams', 'entries', id);
                 const snap = await fb.getDoc(ref);
                 if (!snap.exists()) {
                     await fb.setDoc(ref, {
                         teamName: `${n}조`, budget: 100000, portfolio: { flour: 0, oil: 0, wood: 0, coke: 0 },
-                        hints: [], usedHints: [], solvedRounds: []
+                        hints: [], usedHints: [], solvedRounds: [], uid: user.uid
                     });
+                    setRole(id);
+                } else {
+                    const data = snap.data();
+                    if (data.uid && data.uid !== user.uid) {
+                        alert("이미 다른 참가자가 접속 중인 조입니다.");
+                        return;
+                    }
+                    if (!data.uid) {
+                        await fb.updateDoc(ref, { uid: user.uid });
+                    }
+                    setRole(id);
                 }
-                setRole(id);
             };
 
             const submitPassword = async (input) => {
@@ -368,8 +401,8 @@
                         <h1 className="text-2xl font-black bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent uppercase mb-6 leading-tight">일차방정식<br/>투자 경연대회</h1>
                         <button onClick={() => setShowRules(true)} className="w-full bg-slate-800 py-3 rounded-2xl font-bold mb-4 flex items-center justify-center gap-2 border border-slate-700 hover:bg-slate-700 transition-all text-blue-400"><SafeIcon name="Info" /> 게임 규칙 보기</button>
                         <button onClick={() => setShowAdminLogin(true)} className="w-full bg-slate-800 py-3 rounded-2xl font-bold mb-6 flex items-center justify-center gap-2 border border-slate-700 hover:bg-slate-700 transition-all"><SafeIcon name="Lock" /> 관리자 접속</button>
-                        <div className="grid grid-cols-2 gap-2">
-                            {[1,2,3,4,5,6,7,8,9,10].map(n => <button key={n} onClick={() => joinTeam(n)} className="bg-slate-800 py-3 rounded-xl border border-slate-700 font-bold hover:bg-blue-600 transition-all">{n}조 참가</button>)}
+                        <div className="grid grid-cols-3 gap-2">
+                            {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => <button key={n} onClick={() => joinTeam(n)} className="bg-slate-800 py-3 rounded-xl border border-slate-700 font-bold hover:bg-blue-600 transition-all">{n}조</button>)}
                         </div>
                     </div>
                     {showRules && (
@@ -381,7 +414,7 @@
                                         <h4 className="font-bold text-lg text-blue-400 mb-2">1페이즈: 정보 해독 미션</h4>
                                         <ul className="list-disc pl-5 space-y-2">
                                             <li>각 조는 제한시간 내에 3개의 일차방정식(초록, 노랑, 빨강 난이도)을 풀어야 합니다.</li>
-                                            <li>제한시간은 1라운드 100초부터 시작하여 매 라운드 10초씩 단축됩니다.</li>
+                                            <li>제한시간은 매 라운드 60초입니다.</li>
                                             <li>제한시간 내에 모든 문제의 정답을 맞히면 최고급 정보인 <span className="text-amber-500 font-bold">A급 힌트</span>를 획득합니다.</li>
                                             <li>시간이 초과되거나 오답을 제출할 경우 <span className="text-slate-400 font-bold">B급 힌트</span>를 획득합니다.</li>
                                             <li>문제를 다 푼 후 관리자의 지시에 따라 다음 라운드를 진행하거나 투자 경연으로 넘어갑니다.</li>
@@ -472,7 +505,7 @@
                                             <h3 className="text-xs font-bold text-emerald-400 mb-4 uppercase flex items-center gap-2">
                                                 <SafeIcon name="Check" size={16}/> {gameState.round}라운드 비밀번호 제출 현황
                                             </h3>
-                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
                                                 {allTeams.map(t => {
                                                     const isSolved = t.solvedRounds?.includes(gameState.round);
                                                     return (
@@ -519,6 +552,21 @@
             const [selectedHint, setSelectedHint] = useState(null);
             const [confirmHintType, setConfirmHintType] = useState(null);
             const [showHistory, setShowHistory] = useState(false);
+            const timeoutHandledRound = useRef(-1);
+
+            useEffect(() => {
+                if (gameState?.phase === 'round_result' && role?.startsWith('team_')) {
+                    if (myTeamData && !myTeamData.solvedRounds?.includes(gameState.round) && timeoutHandledRound.current !== gameState.round) {
+                        timeoutHandledRound.current = gameState.round;
+                        const newHint = { type: 'B', id: Date.now().toString() + Math.random().toString() };
+                        fb.updateDoc(fb.doc(fb.getFirestore(), 'investment_game', 'teams', 'entries', role), {
+                            lastRoundCorrect: false,
+                            solvedRounds: fb.arrayUnion(gameState.round),
+                            hints: fb.arrayUnion(newHint)
+                        });
+                    }
+                }
+            }, [gameState?.phase, gameState?.round, role, myTeamData, fb]);
 
             useEffect(() => {
                 if (gameState?.phase === 'investment') {
@@ -554,7 +602,6 @@
                 let isWinner = false;
                 let finalRank = 0;
                 
-                // 참가자 화면의 부하를 막기 위해, 결과 화면에서만 전체 순위를 연산합니다.
                 if (gameState.phase === 'result') {
                     const sorted = [...allTeams].sort((a,b) => {
                         const getW = (t) => (t.budget || 0) + ASSETS.reduce((acc, ast) => acc + (t.portfolio?.[ast.id] || 0) * (currentPrices[ast.id] || 10000), 0);
