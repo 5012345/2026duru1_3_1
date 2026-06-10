@@ -8,6 +8,8 @@
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Fira+Code:wght@400;700&display=swap');
         body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f1f5f9; }
@@ -83,6 +85,23 @@
             return <span className={className} style={{ fontSize: size, lineHeight: 1 }}>{emojiMap[name] || "💠"}</span>;
         };
 
+        const LatexRenderer = ({ math }) => {
+            const containerRef = useRef(null);
+            useEffect(() => {
+                if (containerRef.current && window.katex) {
+                    try {
+                        window.katex.render(math, containerRef.current, {
+                            throwOnError: false,
+                            displayMode: false
+                        });
+                    } catch (err) {
+                        containerRef.current.innerText = math;
+                    }
+                }
+            }, [math]);
+            return <span ref={containerRef} className="math-font text-base font-bold text-white inline-block" />;
+        };
+
         const generateNormalPrice = () => {
             const rand = (Math.random() + Math.random() + Math.random()) / 3; 
             const min = 1000;
@@ -124,7 +143,7 @@
                     let aVal = Math.floor(Math.random() * 3) + 1;
                     if (aVal === bVal) aVal = 1;
                     const dVal = (aVal * (targetX + cVal)) / bVal;
-                    return { eqs: [`${aVal === 1 ? '' : aVal}/${bVal}(x + ${cVal}) = ${dVal}`], answer: [targetX] };
+                    return { eqs: [`\\frac{${aVal}}{${bVal}}(x + ${cVal}) = ${dVal}`], answer: [targetX] };
                 }
             }
         };
@@ -269,39 +288,74 @@
                     history = [{ flour: 10000, oil: 10000, wood: 10000, coke: 10000 }];
                     const trends = { flour: 0, oil: 0, wood: 0, coke: 0 };
                     
+                    // Determine if crash day or boom day will happen in the weekly period (Tuesday to Sunday, i.e., index 1 to 6)
+                    const hasCrashDay = Math.random() < 0.03;
+                    const hasBoomDay = Math.random() < 0.03;
+                    
+                    let crashDayIdx = -1;
+                    let boomDayIdx = -1;
+                    
+                    if (hasCrashDay) {
+                        crashDayIdx = Math.floor(Math.random() * 6) + 1; // index 1 to 6
+                    }
+                    if (hasBoomDay) {
+                        do {
+                            boomDayIdx = Math.floor(Math.random() * 6) + 1; // index 1 to 6
+                        } while (boomDayIdx === crashDayIdx);
+                    }
+                    
                     for (let i = 1; i <= 7; i++) {
                         const prev = history[i - 1];
                         const next = {}; 
                         
-                        const marketEventRand = Math.random();
-                        const isCrash = marketEventRand < 0.03; // 폭락장 3%
-                        const isBoom = marketEventRand >= 0.03 && marketEventRand < 0.06; // 폭등장 3%
+                        const isCrash = (i === crashDayIdx);
+                        const isBoom = (i === boomDayIdx);
                         
                         ASSETS.forEach(a => { 
                             if (isCrash) {
+                                // 모든 자원의 가격이 5000원 이하
                                 next[a.id] = Math.floor(Math.random() * 5 + 1) * 1000; // 1000 ~ 5000
                                 trends[a.id] = -1;
                             } else if (isBoom) {
+                                // 모든 자원의 가격이 15000원 이상
                                 next[a.id] = Math.floor(Math.random() * 6 + 15) * 1000; // 15000 ~ 20000
                                 trends[a.id] = 1;
                             } else {
-                                // 추세 및 가격생성 로직
-                                let dir = trends[a.id] !== 0 ? (Math.random() < 0.20 ? trends[a.id] : -trends[a.id]) : (Math.random() < 0.5 ? 1 : -1);
+                                // Candidate-weight selection for price changes in steps of 1000
+                                // and normal-like distribution around the median (10000)
+                                const candidates = [];
+                                const deltas = [-4000, -3000, -2000, -1000, 1000, 2000, 3000, 4000];
+                                const trendDir = trends[a.id] || 0;
                                 
-                                // 중앙값 회귀: 거리가 멀수록 회귀 확률 대폭 강화
-                                const pull = Math.abs(prev[a.id] - 10000) / 10000;
-                                if (Math.random() < Math.pow(pull, 0.8)) dir = prev[a.id] > 10000 ? -1 : 1;
-                                if (prev[a.id] >= 20000) dir = -1;
-                                if (prev[a.id] <= 1000) dir = 1;
+                                deltas.forEach(delta => {
+                                    const np = prev[a.id] + delta;
+                                    if (np >= 1000 && np <= 20000) {
+                                        const dist = np - 10000;
+                                        // Gaussian weight centered at 10000, sigma = 6000
+                                        const gWeight = Math.exp(-0.5 * Math.pow(dist / 6000, 2));
+                                        
+                                        // Trend momentum
+                                        const actualDir = Math.sign(delta);
+                                        const tWeight = (trendDir !== 0) ? (actualDir === trendDir ? 1.5 : 0.6) : 1.0;
+                                        
+                                        candidates.push({ np, weight: gWeight * tWeight });
+                                    }
+                                });
                                 
-                                // 변동폭 완화: 1000 ~ 4000
-                                let jump = (Math.floor(Math.random() * 2) + Math.floor(Math.random() * 3) + 1) * 1000;
+                                // Weighted random selection
+                                const totalWeight = candidates.reduce((sum, c) => sum + c.weight, 0);
+                                let r = Math.random() * totalWeight;
+                                let selected = candidates[candidates.length - 1];
+                                for (let c of candidates) {
+                                    r -= c.weight;
+                                    if (r <= 0) {
+                                        selected = c;
+                                        break;
+                                    }
+                                }
                                 
-                                let np = prev[a.id] + dir * jump;
-                                if (Math.random() < 0.01) np = dir === 1 ? 20000 : 1000;
-                                
-                                np = Math.min(20000, Math.max(1000, np));
-                                trends[a.id] = np > prev[a.id] ? 1 : (np < prev[a.id] ? -1 : dir);
+                                const np = selected.np;
+                                trends[a.id] = np > prev[a.id] ? 1 : (np < prev[a.id] ? -1 : trendDir);
                                 next[a.id] = np; 
                             }
                         });
@@ -435,7 +489,7 @@
                                         <ul className="list-disc pl-5 space-y-2">
                                             <li>해독 미션에서 획득한 힌트는 2페이즈 투자 경연 중에 언제든 사용할 수 있는 <span className="font-bold text-rose-400">소모성 아이템</span>입니다.</li>
                                             <li><span className="text-amber-500 font-bold">A급 힌트</span>: 다음 요일의 '모든 자원(4개)' 변동 가격을 정확히 알려줍니다.</li>
-                                            <li><span className="text-slate-400 font-bold">B급 힌트</span>: 다음 요일의 '무작위 2개 자원' 변동 가격만 알려줍니다.</li>
+                                            <li><span className="text-slate-400 font-bold">B급 힌트</span>: 다음 요일의 '무작위 1개 자원' 변동 가격만 알려줍니다.</li>
                                             <li>한 번 사용한 힌트는 우측 상단의 '열람 기록' 버튼을 눌러 다시 확인할 수 있습니다.</li>
                                         </ul>
                                     </div>
@@ -500,19 +554,40 @@
                                         <button onClick={resetGame} className="mt-4 text-[10px] text-rose-500 font-black uppercase tracking-widest w-full text-right hover:text-rose-400 transition-colors">시스템 초기화</button>
                                     </section>
                                     
-                                    {gameState?.phase === 'password' && (
+                                    {(gameState?.phase === 'password' || gameState?.phase === 'round_result') && (
                                         <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800">
                                             <h3 className="text-xs font-bold text-emerald-400 mb-4 uppercase flex items-center gap-2">
-                                                <SafeIcon name="Check" size={16}/> {gameState.round}라운드 비밀번호 제출 현황
+                                                <SafeIcon name="Check" size={16}/> {gameState.round}라운드 힌트 획득 현황
                                             </h3>
                                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
                                                 {allTeams.map(t => {
                                                     const isSolved = t.solvedRounds?.includes(gameState.round);
+                                                    const gotA = isSolved && t.lastRoundCorrect;
+                                                    const gotB = isSolved ? !t.lastRoundCorrect : (gameState.phase === 'round_result');
+                                                    
+                                                    let cardStyle = "bg-slate-800/40 border-slate-700 text-slate-400";
+                                                    let statusText = "미제출";
+                                                    let iconName = "Lock";
+                                                    
+                                                    if (gotA) {
+                                                        cardStyle = "bg-amber-500/10 border-amber-500/30 text-amber-400";
+                                                        statusText = "A급 힌트 획득";
+                                                        iconName = "Trophy";
+                                                    } else if (gotB) {
+                                                        cardStyle = "bg-slate-500/10 border-slate-700 text-slate-300";
+                                                        statusText = isSolved ? "B급 힌트 획득" : "B급 힌트 (시간 초과)";
+                                                        iconName = "FileText";
+                                                    } else {
+                                                        cardStyle = "bg-rose-500/10 border-rose-500/30 text-rose-400 animate-pulse";
+                                                        statusText = "해독 진행 중";
+                                                        iconName = "Timer";
+                                                    }
+                                                    
                                                     return (
-                                                        <div key={t.id} className={`p-4 rounded-2xl border flex flex-col items-center text-center gap-2 transition-all shadow-md ${isSolved ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' : 'bg-rose-500/20 border-rose-500/50 text-rose-400'}`}>
-                                                            <SafeIcon name={isSolved ? "Unlock" : "Lock"} size={24}/>
+                                                        <div key={t.id} className={`p-4 rounded-2xl border flex flex-col items-center text-center gap-2 transition-all shadow-md ${cardStyle}`}>
+                                                            <SafeIcon name={iconName} size={24}/>
                                                             <span className="text-sm font-black">{t.teamName}</span>
-                                                            <span className="text-[10px] font-bold">{isSolved ? "제출 완료" : "미제출"}</span>
+                                                            <span className="text-[10px] font-bold">{statusText}</span>
                                                         </div>
                                                     );
                                                 })}
@@ -586,7 +661,7 @@
                 else {
                     tDay = DAYS[nextDayIdx]; const prices = gameState.priceHistory[nextDayIdx];
                     if (type === 'A') { ASSETS.forEach(a => hintText += `${a.name}: ${prices[a.id].toLocaleString()}원\n`); }
-                    else { const shuf = [...ASSETS].sort(() => 0.5 - Math.random()); hintText += `${shuf[0].name}: ${prices[shuf[0].id].toLocaleString()}원\n${shuf[1].name}: ${prices[shuf[1].id].toLocaleString()}원`; }
+                    else { const shuf = [...ASSETS].sort(() => 0.5 - Math.random()); hintText += `${shuf[0].name}: ${prices[shuf[0].id].toLocaleString()}원`; }
                 }
                 const newUsedHint = { type, text: hintText, targetDay: tDay, id: Date.now().toString() };
                 await fb.updateDoc(fb.doc(fb.getFirestore(), 'investment_game', 'teams', 'entries', role), { hints: myTeamData.hints.filter(h => h.id !== hintToRemove.id), usedHints: fb.arrayUnion(newUsedHint) });
@@ -672,7 +747,7 @@
                                 <div><span className="bg-blue-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase mb-2 inline-block">ROUND {gameState.round}</span><h3 className="text-2xl font-black">정보 해독 미션</h3></div>
                                 <div id="mission-timer" className="text-blue-400 font-mono text-2xl">00:00</div>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">{gameState.questions.map((q, idx) => (<div key={idx} className={`bg-slate-950 p-6 rounded-3xl border-2 ${idx===0?'border-emerald-500/50':idx===1?'border-yellow-500/50':'border-rose-500/50'}`}><div className="text-[10px] font-black opacity-40 uppercase mb-2">Q{idx+1}</div><div className="math-font text-sm font-bold">{q.eqs[0]}</div></div>))}</div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">{gameState.questions.map((q, idx) => (<div key={idx} className={`bg-slate-950 p-6 rounded-3xl border-2 ${idx===0?'border-emerald-500/50':idx===1?'border-yellow-500/50':'border-rose-500/50'}`}><div className="text-[10px] font-black opacity-40 uppercase mb-2">Q{idx+1}</div><div className="math-font text-sm font-bold flex items-center justify-center min-h-[2.5rem]"><LatexRenderer math={q.eqs[0]} /></div></div>))}</div>
                             {!solved ? (<div className="space-y-6"><div className="grid grid-cols-3 gap-4">{[0,1,2].map(i => (<div key={i}><input type="number" placeholder="X" value={input[i]} onChange={e=> {let n=[...input]; n[i]=e.target.value; setInput(n)}} className="w-full bg-slate-950 border border-slate-800 p-4 rounded-xl text-center text-xl font-bold" /></div>))}</div><button onClick={() => submitPassword(input)} className="w-full bg-blue-600 py-4 rounded-2xl font-bold">해독 정보 전송</button></div>) : <div className="p-10 bg-blue-600/10 rounded-3xl text-center text-blue-400 font-black">해독 완료. 대기 중...</div>}
                         </div>
                     </div>
