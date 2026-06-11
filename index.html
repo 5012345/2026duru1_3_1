@@ -207,19 +207,36 @@
 
             useEffect(() => {
                 if (!fb) return;
+                let unsubGame = null;
+                let unsubTeams = null;
                 try {
                     const app = fb.initializeApp(firebaseConfig);
                     const db = fb.getFirestore(app);
                     const auth = fb.getAuth(app);
+                    
                     fb.signInAnonymously(auth).catch(err => setErrorMsg(`인증 오류: ${err.message}`));
-                    const unsubGame = fb.onSnapshot(fb.doc(db, 'investment_game', 'state', 'public', gameDocId), (snap) => {
-                        if (snap.exists()) setGameState(snap.data());
-                    }, (err) => setErrorMsg(`데이터베이스 읽기 오류: ${err.message}`));
-                    const unsubTeams = fb.onSnapshot(fb.collection(db, 'investment_game', 'teams', 'entries'), (snap) => {
-                        setAllTeams(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-                        setLoading(false);
-                    }, (err) => setErrorMsg(`팀 데이터 오류: ${err.message}`));
-                    return () => { unsubGame(); unsubTeams(); };
+                    
+                    const unsubAuth = fb.onAuthStateChanged(auth, (user) => {
+                        if (user) {
+                            if (unsubGame) unsubGame();
+                            if (unsubTeams) unsubTeams();
+                            
+                            unsubGame = fb.onSnapshot(fb.doc(db, 'investment_game', 'state', 'public', gameDocId), (snap) => {
+                                if (snap.exists()) setGameState(snap.data());
+                            }, (err) => setErrorMsg(`데이터베이스 읽기 오류: ${err.message}`));
+                            
+                            unsubTeams = fb.onSnapshot(fb.collection(db, 'investment_game', 'teams', 'entries'), (snap) => {
+                                setAllTeams(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                                setLoading(false);
+                            }, (err) => setErrorMsg(`팀 데이터 오류: ${err.message}`));
+                        }
+                    });
+                    
+                    return () => {
+                        unsubAuth();
+                        if (unsubGame) unsubGame();
+                        if (unsubTeams) unsubTeams();
+                    };
                 } catch (err) { setErrorMsg(`초기화 치명적 오류: ${err.message}`); }
             }, [fb]);
 
