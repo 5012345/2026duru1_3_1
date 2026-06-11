@@ -214,21 +214,38 @@
                     const db = fb.getFirestore(app);
                     const auth = fb.getAuth(app);
                     
-                    fb.signInAnonymously(auth).catch(err => setErrorMsg(`인증 오류: ${err.message}`));
+                    console.log("Initializing Firebase Auth anonymous sign-in...");
+                    fb.signInAnonymously(auth)
+                        .then(cred => console.log("Firebase Auth Sign-in Success:", cred.user))
+                        .catch(err => {
+                            console.error("Firebase Auth Sign-in Error:", err);
+                            setErrorMsg(`인증 오류: ${err.message}`);
+                        });
                     
                     const unsubAuth = fb.onAuthStateChanged(auth, (user) => {
+                        console.log("Firebase Auth State Changed. User:", user);
                         if (user) {
                             if (unsubGame) unsubGame();
                             if (unsubTeams) unsubTeams();
                             
+                            console.log("Subscribing to game state document...");
                             unsubGame = fb.onSnapshot(fb.doc(db, 'investment_game', 'state', 'public', gameDocId), (snap) => {
+                                console.log("Game state snapshot loaded. Exists:", snap.exists());
                                 if (snap.exists()) setGameState(snap.data());
-                            }, (err) => setErrorMsg(`데이터베이스 읽기 오류: ${err.message}`));
+                            }, (err) => {
+                                console.error("Game state snapshot permission error:", err);
+                                setErrorMsg(`데이터베이스 읽기 오류: ${err.message}`);
+                            });
                             
+                            console.log("Subscribing to teams collection...");
                             unsubTeams = fb.onSnapshot(fb.collection(db, 'investment_game', 'teams', 'entries'), (snap) => {
+                                console.log("Teams collection snapshot loaded. Size:", snap.size);
                                 setAllTeams(snap.docs.map(d => ({ id: d.id, ...d.data() })));
                                 setLoading(false);
-                            }, (err) => setErrorMsg(`팀 데이터 오류: ${err.message}`));
+                            }, (err) => {
+                                console.error("Teams collection snapshot permission error:", err);
+                                setErrorMsg(`팀 데이터 오류: ${err.message}`);
+                            });
                         }
                     });
                     
@@ -239,6 +256,45 @@
                     };
                 } catch (err) { setErrorMsg(`초기화 치명적 오류: ${err.message}`); }
             }, [fb]);
+
+            // F5 새로고침 또는 창 재접속 시 익명 UID 기반 세션 자동 복구
+            useEffect(() => {
+                if (loading || role || !fb) return;
+                try {
+                    const auth = fb.getAuth();
+                    const user = auth.currentUser;
+                    if (user) {
+                        const existingTeam = allTeams.find(t => t.uid === user.uid);
+                        if (existingTeam) {
+                            console.log("자동 세션 복구 성공:", existingTeam.id);
+                            setRole(existingTeam.id);
+                        }
+                    }
+                } catch (e) {
+                    console.error("세션 복구 에러:", e);
+                }
+            }, [allTeams, loading, role, fb]);
+
+            // 관리자 초기화 또는 강제 퇴장 시 조 삭제 감지
+            const hasExistRef = useRef(false);
+            useEffect(() => {
+                if (role && role !== 'admin') {
+                    const exists = allTeams.some(t => t.id === role);
+                    if (exists) {
+                        hasExistRef.current = true;
+                    } else if (hasExistRef.current) {
+                        hasExistRef.current = false;
+                        if (gameState?.phase === 'lobby' || !gameState?.phase) {
+                            alert("시스템이 초기화되었습니다. 다시 접속하세요");
+                        } else {
+                            alert("관리자에 의해 퇴장되었습니다.");
+                        }
+                        setRole(null);
+                    }
+                } else {
+                    hasExistRef.current = false;
+                }
+            }, [allTeams, role, gameState?.phase]);
 
             useEffect(() => {
                 if (!fb || role !== 'admin' || !gameState) return;
@@ -380,6 +436,13 @@
                     phase: 'lobby', round: 0, currentPrices: { flour: 10000, oil: 10000, wood: 10000, coke: 10000 },
                     readyTeams: [], currentDayIdx: 0, priceHistory: []
                 });
+            };
+
+            const kickTeam = async (teamId) => {
+                if (confirm(`${teamId.replace('team_', '')}조 참가자를 퇴장시키겠습니까?`)) {
+                    const db = fb.getFirestore();
+                    await fb.deleteDoc(fb.doc(db, 'investment_game', 'teams', 'entries', teamId));
+                }
             };
 
             const joinTeam = async (n) => {
@@ -547,6 +610,31 @@
                                         </div>
                                         <button onClick={resetGame} className="mt-4 text-[10px] text-rose-500 font-black uppercase tracking-widest w-full text-right hover:text-rose-400 transition-colors">시스템 초기화</button>
                                     </section>
+
+                                    {/* 참가자 관리 섹션 */}
+                                    <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800">
+                                        <h3 className="text-xs font-bold text-rose-500 mb-4 uppercase flex items-center gap-2">
+                                            <SafeIcon name="X" size={16}/> 참가자 관리
+                                        </h3>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                            {allTeams.map(t => (
+                                                <div key={t.id} className="flex justify-between items-center p-3 bg-slate-800/40 rounded-xl border border-slate-800 text-sm">
+                                                    <div>
+                                                        <span className="font-bold text-white mr-2">{t.teamName}</span>
+                                                        <span className="text-[10px] text-slate-500 font-mono">({(t.budget || 0).toLocaleString()}원)</span>
+                                                    </div>
+                                                    <button onClick={() => kickTeam(t.id)} className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg transition-colors">
+                                                        퇴장
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            {allTeams.length === 0 && (
+                                                <div className="col-span-full text-center py-4 text-slate-500 text-xs font-bold">
+                                                    접속한 참가자가 없습니다.
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                     
                                     {(gameState?.phase === 'password' || gameState?.phase === 'round_result') && (
                                         <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800">
