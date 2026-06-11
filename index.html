@@ -358,7 +358,12 @@
                 let history = gameState?.priceHistory || [];
                 
                 if (nextRound === 1 || !history.length) {
-                    history = [{ flour: 10000, oil: 10000, wood: 10000, coke: 10000 }];
+                    const mondayPrices = {};
+                    ASSETS.forEach(a => {
+                        const choices = [7000, 8000, 9000, 10000, 11000, 12000, 13000];
+                        mondayPrices[a.id] = choices[Math.floor(Math.random() * choices.length)];
+                    });
+                    history = [mondayPrices];
                     const trends = { flour: 0, oil: 0, wood: 0, coke: 0 };
                     
                     // Determine if crash day or boom day will happen in the weekly period (Tuesday to Sunday, i.e., index 1 to 6)
@@ -791,7 +796,39 @@
                                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-emerald-500"></div>
                                     <div className="flex justify-between items-center mb-6"><h3 className="font-bold text-emerald-400 text-[10px] uppercase flex items-center gap-2"><SafeIcon name="TrendingUp" size={14}/> {DAYS[gameState.currentDayIdx]} Market</h3><button onClick={() => setShowHistory(true)} className="bg-slate-800 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-700 flex items-center gap-1"><SafeIcon name="History"/> 열람 기록</button></div>
                                     <div className="grid grid-cols-2 gap-4">
-                                        {ASSETS.map(a => (<div key={a.id} className="bg-slate-800/40 p-4 rounded-2xl border border-slate-800/60"><div className="flex justify-between items-start mb-4"><div className="flex gap-2 items-center"><span className="text-2xl">{a.icon}</span><span className="font-bold">{a.name}</span></div><div className="text-[10px] text-blue-400 font-bold uppercase">보유: {myTeamData?.portfolio?.[a.id] || 0}</div></div><div className="flex justify-between items-center"><div className="font-mono font-black text-xl">{(currentPrices[a.id] || 0).toLocaleString()}원</div><div className="flex gap-1"><button onClick={() => trade(a.id, 1)} className="bg-emerald-600 px-3 py-1.5 rounded-lg text-[10px] font-black">BUY</button><button onClick={() => trade(a.id, -1)} className="bg-rose-600 px-3 py-1.5 rounded-lg text-[10px] font-black">SELL</button></div></div></div>))}
+                                        {ASSETS.map(a => (
+                                            <div key={a.id} className="bg-slate-800/40 p-4 rounded-2xl border border-slate-800/60">
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div className="flex gap-2 items-center">
+                                                        <span className="text-2xl">{a.icon}</span>
+                                                        <span className="font-bold">{a.name}</span>
+                                                    </div>
+                                                    <div className="text-[10px] text-blue-400 font-bold uppercase">보유: {myTeamData?.portfolio?.[a.id] || 0}</div>
+                                                </div>
+                                                <div className="flex justify-between items-center">
+                                                    <div className="font-mono font-black text-xl mr-2">{(currentPrices[a.id] || 0).toLocaleString()}원</div>
+                                                    <div className="flex flex-col gap-1.5">
+                                                        <div className="flex gap-1">
+                                                            <button onClick={() => trade(a.id, 1)} className="bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-lg text-[10px] font-black w-12 text-center transition-colors">BUY</button>
+                                                            <button onClick={() => trade(a.id, -1)} className="bg-rose-600 hover:bg-rose-500 px-3 py-1.5 rounded-lg text-[10px] font-black w-12 text-center transition-colors">SELL</button>
+                                                        </div>
+                                                        <div className="flex gap-1">
+                                                            <button onClick={() => {
+                                                                const price = currentPrices[a.id] || 0;
+                                                                if (price > 0) {
+                                                                    const amt = Math.floor((myTeamData?.budget || 0) / price);
+                                                                    if (amt > 0) trade(a.id, amt);
+                                                                }
+                                                            }} className="bg-emerald-800 hover:bg-emerald-700 px-1 py-1 rounded-md text-[9px] font-bold flex-1 text-center transition-colors">일괄매수</button>
+                                                            <button onClick={() => {
+                                                                const amt = myTeamData?.portfolio?.[a.id] || 0;
+                                                                if (amt > 0) trade(a.id, -amt);
+                                                            }} className="bg-rose-800 hover:bg-rose-700 px-1 py-1 rounded-md text-[9px] font-bold flex-1 text-center transition-colors">일괄매도</button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
